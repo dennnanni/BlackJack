@@ -27,3 +27,7 @@ packages = [
 [tool.poetry.scripts]
 database = "database_interface.main:main"
 game_server = "game_server.src.main:main"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+
