@@ -25,31 +25,51 @@ class Table:
     
 class Game:
     
+    DEALER_STAND_VALUE = 17
+    
     def __init__(self, players):
         self.__dealer_hand: list[Card] = []
         self.__active_users: list[User] = players
         self.__bets: dict[User, float] = {}
+        
+    def get_users(self):
+        """Restituisce la lista degli utenti attivi."""
+        return self.__active_users
+        
+    def add_dealer_card(self, card):
+        """Aggiunge una carta alla mano del dealer."""
+        if Hand.is_busted(self.__dealer_hand) or Hand.is_blackjack(self.__dealer_hand) or Hand.get_hand_value(self.__dealer_hand) >= self.DEALER_STAND_VALUE:
+            raise Exception("Dealer cannot take more cards")
+        self.__dealer_hand.append(card)
+        
+    def place_bet(self, user, bet):
+        """Pone una scommessa per l'utente."""
+        if user not in self.__active_users:
+            raise ValueError("User not in active users")
+        if bet > user.get_balance():
+            raise ValueError("Bet exceeds user's balance")
+        self.__bets[user] = bet
     
     def determine_result(self):
         results: list[Result] = []
         for user in self.__active_users:
-            result = Result(user.get_username(), self.__determine_difference(user), user.get_balance())
+            result = Result(user.get_username(), self._determine_difference(user), user.get_balance())
             results.append(result)
         return results
                 
-    def __determine_difference(self, user):
-        if Hand.__is_busted(user.get_hand()):
+    def _determine_difference(self, user):
+        if Hand.is_busted(user.get_hand()):
             return -self.__bets[user]
-        elif self.__is_winner(user):
+        elif self._is_winner(user):
             return self.__bets[user]
         else:
             return 0
         
-    def __is_winner(self, user):
+    def _is_winner(self, user):
         """Controlla se l'utente ha vinto la mano, non considera il pareggio."""
-        return not Hand.__is_busted(user.get_hand()) and \
-            Hand.__get_hand_value(self.__dealer_hand) < Hand.__get_hand_value(user.get_hand()) or \
-            Hand.__is_blackjack(user.get_hand()) and not Hand.__is_blackjack(self.__dealer_hand)
+        return not Hand.is_busted(user.get_hand()) and \
+            Hand.get_hand_value(self.__dealer_hand) < Hand.get_hand_value(user.get_hand()) or \
+            Hand.is_blackjack(user.get_hand()) and not Hand.is_blackjack(self.__dealer_hand)
     
 class User:
     def __init__(self, username, balance):
