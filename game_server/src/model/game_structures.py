@@ -24,6 +24,9 @@ class Table:
         return self.game
     
 class Game:
+    BLACKJACK = 21
+    BLACKJACK_HAND_LENGTH = 2
+    
     def __init__(self, players):
         self.__dealer_hand: list[Card] = []
         self.__active_users: list[User] = players
@@ -33,9 +36,11 @@ class Game:
         results: list[Result] = []
         for user in self.__active_users:
             result = Result(user.get_username(), self.__determine_difference(user), user.get_balance())
+            results.append(result)
+        return results
                 
     def __determine_difference(self, user):
-        if self.__is_busted(user.get_hand()):
+        if Hand.__is_busted(user.get_hand()):
             return -self.__bets[user]
         elif self.__is_winner(user):
             return self.__bets[user]
@@ -43,14 +48,10 @@ class Game:
             return 0
         
     def __is_winner(self, user):
-        return self.__get_hand_value(self.__dealer_hand) < self.__get_hand_value(user.get_hand())
-    
-    def __get_hand_value(self, hand):
-        return sum(card.get_value() for card in hand)
-    
-    def __is_busted(self, hand):
-        return self.__get_hand_value(hand) > 21
-        
+        """Controlla se l'utente ha vinto la mano, non considera il pareggio."""
+        return not Hand.__is_busted(user.get_hand()) and \
+            Hand.__get_hand_value(self.__dealer_hand) < Hand.__get_hand_value(user.get_hand()) or \
+            Hand.__is_blackjack(user.get_hand()) and not Hand.__is_blackjack(self.__dealer_hand)
     
 class User:
     def __init__(self, username, balance):
@@ -123,3 +124,26 @@ class Result:
         self.username = username
         self.balanceDifference = balanceDifference
         self.newBalance = newBalance
+        
+class Hand:
+    @staticmethod
+    def __get_hand_value(self, hand):
+        hand_value = sum(card.get_value() for card in hand)
+        if self.__has_ace(hand) and hand_value > self.BLACKJACK:
+            # Se la mano ha un asso e il valore supera 21, sottraiamo 10
+            hand_value -= 10
+        return hand_value
+    
+    @staticmethod
+    def __is_busted(self, hand):
+        return self.__get_hand_value(hand) > self.BLACKJACK
+    
+    @staticmethod
+    def __has_ace(self, hand):
+        return any(card.get_value() == 11 for card in hand)
+    
+    @staticmethod
+    def __is_blackjack(self, hand):
+        """Controlla se la mano è un blackjack (21 con due carte)."""
+        return len(hand) == self.BLACKJACK_HAND_LENGTH and self.__get_hand_value(hand) == self.BLACKJACK and self.__has_ace(hand)
+        
