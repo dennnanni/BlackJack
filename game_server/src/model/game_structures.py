@@ -24,8 +24,6 @@ class Table:
         return self.game
     
 class Game:
-    BLACKJACK = 21
-    BLACKJACK_HAND_LENGTH = 2
     
     def __init__(self, players):
         self.__dealer_hand: list[Card] = []
@@ -126,24 +124,27 @@ class Result:
         self.newBalance = newBalance
         
 class Hand:
+    BLACKJACK = 21
+    BLACKJACK_HAND_LENGTH = 2
+    
     @staticmethod
-    def __get_hand_value(self, hand):
+    def __get_hand_value(hand):
         hand_value = sum(card.get_value() for card in hand)
-        if self.__has_ace(hand) and hand_value > self.BLACKJACK:
+        if Hand.__has_ace(hand) and hand_value > Hand.BLACKJACK:
             # Se la mano ha un asso e il valore supera 21, sottraiamo 10
             hand_value -= 10
         return hand_value
     
     @staticmethod
-    def __is_busted(self, hand):
-        return self.__get_hand_value(hand) > self.BLACKJACK
+    def __is_busted(hand):
+        return Hand.__get_hand_value(hand) > Hand.BLACKJACK
     
     @staticmethod
-    def __has_ace(self, hand):
+    def __has_ace(hand):
         return any(card.get_value() == 11 for card in hand)
     
     @staticmethod
-    def __is_blackjack(self, hand):
+    def __is_blackjack(hand):
         """Controlla se la mano è un blackjack (21 con due carte)."""
-        return len(hand) == self.BLACKJACK_HAND_LENGTH and self.__get_hand_value(hand) == self.BLACKJACK and self.__has_ace(hand)
+        return len(hand) == Hand.BLACKJACK_HAND_LENGTH and Hand.__get_hand_value(hand) == Hand.BLACKJACK and Hand.__has_ace(hand)
         
