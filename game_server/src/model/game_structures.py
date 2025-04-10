@@ -53,28 +53,32 @@ class Game:
     
 class User:
     def __init__(self, username, balance):
-        self.username = username  # Nome dell'utente
-        self.balance = balance  # Saldo dell'utente (fiches o denaro)
-        self.cards = []  # Mano dell'utente, inizialmente vuota
+        self.__username = username  # Nome dell'utente
+        self.__balance = balance  # Saldo dell'utente (fiches o denaro)
+        self.__cards = []  # Mano dell'utente, inizialmente vuota
         self.is_connected = False 
 
     def add_card(self, card):
-        """Aggiunge una carta alla mano dell'utente."""
-        self.cards.append(card)
+        self.__cards.append(card)
         
     def remove_card(self, card):
         """Rimuove una carta dalla mano del giocatore."""
-        if card in self.cards:
-            self.cards.remove(card)
+        if card in self.__cards:
+            self.__cards.remove(card)
         else:
             raise ValueError("Card not in user's hand")
+        
+    def get_username(self):
+        return self.__username
+
+    def get_balance(self):
+        return self.__balance
 
     def get_hand(self):
-        """Restituisce le carte attualmente nella mano dell'utente."""
-        return self.cards
+        return self.__cards
 
     def __str__(self):
-        return f"User: {self.username}, Balance: {self.balance}, Hand: {self.get_hand()}"
+        return f"User: {self.__username}, Balance: {self.__balance}, Hand: {self.__cards}"
 
     
 class Deck:
@@ -85,21 +89,21 @@ class Card:
     SUITS = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
     TYPES = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
     VALUES = {
-        'A': 11, #il valore uno dobbiamo
+        'A': 11,
         '2': 2, '3': 3, '4': 4, '5': 5,
         '6': 6, '7': 7, '8': 8, '9': 9,
         '10': 10, 'J': 10, 'Q': 10, 'K': 10
     }
     
     def __init__(self, card_type, suit):
-        if card_type not in self.TYPES:
+        if card_type not in range(len(self.TYPES)):
             raise ValueError("Invalid card type")
         if suit not in range(4):
             raise ValueError("Invalid suit index")
 
         self.type = self.TYPES[card_type]
         self.suit = self.SUITS[suit]
-        self.value = self.VALUES[card_type]
+        self.value = self.VALUES[self.type]
         
     def get_value(self):
         """Restituisce il valore della carta."""
