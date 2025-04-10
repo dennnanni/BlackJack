@@ -132,23 +132,23 @@ class Hand:
     BLACKJACK_HAND_LENGTH = 2
     
     @staticmethod
-    def __get_hand_value(hand):
+    def get_hand_value(hand):
         hand_value = sum(card.get_value() for card in hand)
-        if Hand.__has_ace(hand) and hand_value > Hand.BLACKJACK:
+        if Hand.has_ace(hand) and hand_value > Hand.BLACKJACK:
             # Se la mano ha un asso e il valore supera 21, sottraiamo 10
             hand_value -= 10
         return hand_value
     
     @staticmethod
-    def __is_busted(hand):
-        return Hand.__get_hand_value(hand) > Hand.BLACKJACK
+    def is_busted(hand):
+        return Hand.get_hand_value(hand) > Hand.BLACKJACK
     
     @staticmethod
-    def __has_ace(hand):
+    def has_ace(hand):
         return any(card.get_value() == 11 for card in hand)
     
     @staticmethod
-    def __is_blackjack(hand):
+    def is_blackjack(hand):
         """Controlla se la mano è un blackjack (21 con due carte)."""
-        return len(hand) == Hand.BLACKJACK_HAND_LENGTH and Hand.__get_hand_value(hand) == Hand.BLACKJACK and Hand.__has_ace(hand)
+        return len(hand) == Hand.BLACKJACK_HAND_LENGTH and Hand.get_hand_value(hand) == Hand.BLACKJACK and Hand.has_ace(hand)
         
