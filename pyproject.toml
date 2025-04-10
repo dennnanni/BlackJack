@@ -19,9 +19,11 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry]
 packages = [
+    { include = "game_server"},    
     { include = "main_server"},    
     { include = "database_interface", from = "main_server" }     
 ]
 
 [tool.poetry.scripts]
 database = "database_interface.main:main"
+game_server = "game_server.src.main:main"
