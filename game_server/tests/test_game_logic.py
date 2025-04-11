@@ -67,8 +67,21 @@ def test_dealer_cannot_add_more_cards():
     game.add_dealer_card(Card(1, 0))
     game.add_dealer_card(Card(11, 0))
     game.add_dealer_card(Card(12, 0))
-    #assert Hand.is_busted(game.get_dealer_hand()) == True
     with pytest.raises(Exception) as exc_info:
         game.add_dealer_card(Card(12, 0))
     assert str(exc_info.value) == "Dealer cannot take more cards"
     
+def test_is_winner():
+    user = User("User1", 200)
+    game = Game([user])
+    
+    user.add_card(Card(0, 0))  # Ace
+    user.add_card(Card(10, 0))  # 10
+    game.add_dealer_card(Card(8, 0))  # 9
+    game.add_dealer_card(Card(11, 0))  # 10
+    assert game._is_winner(user) == True
+    
+    user.remove_card(Card(0, 0))  # Remove Ace
+    assert len(user.get_hand()) == 1  # Check if Ace is removed
+    user.add_card(Card(8, 0))  # Add 9
+    assert game._is_winner(user) == False
