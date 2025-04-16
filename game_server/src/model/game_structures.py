@@ -116,13 +116,13 @@ class Card:
     }
     
     def __init__(self, card_type, suit):
-        if card_type not in range(len(self.TYPES)):
+        if card_type.upper() not in self.TYPES:
             raise ValueError("Invalid card type")
-        if suit not in range(4):
-            raise ValueError("Invalid suit index")
+        if suit.capitalize() not in self.SUITS:
+            raise ValueError("Invalid suit")
 
-        self.type = self.TYPES[card_type]
-        self.suit = self.SUITS[suit]
+        self.type = card_type.upper()
+        self.suit = self.SUITS.index(suit.capitalize())
         self.value = self.VALUES[self.type]
         
     def get_value(self):
