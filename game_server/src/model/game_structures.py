@@ -1,3 +1,5 @@
+import random
+
 class Table:
     def __init__(self):
         self.users = []
@@ -102,8 +104,20 @@ class User:
 
     
 class Deck:
-    def __init__(self):
-        pass
+    def __init__(self, num_decks=1):
+        self.cards = []
+        # Builds the deck with the specified number of decks
+        for suit in Card.SUITS:
+            for card_type in Card.TYPES:
+                for _ in range(num_decks):
+                    self.cards.append(Card(card_type, suit))
+    
+    def draw_card(self):
+        """Pesca una carta dal mazzo."""
+        if not self.cards:
+            raise Exception("No cards left in the deck")
+        card_index = random.randint(0, len(self.cards) - 1)
+        return self.cards.pop(card_index)
     
 class Card:
     SUITS = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
