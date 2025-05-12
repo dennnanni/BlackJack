@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, Float, ForeignKey, Table
+from sqlalchemy import Column, String, Integer, Float, ForeignKey, Table, Numeric
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -16,7 +16,7 @@ class User(Base):
     username = Column(String, primary_key=True)
     password = Column(String, nullable=False)
     salt = Column(String, nullable=False)
-    balance = Column(Float, default=0.0)
+    balance = Column(Numeric(10,2), default=0.0)
 
     servers = relationship("GameServer", secondary=userservers, back_populates="users")
 
