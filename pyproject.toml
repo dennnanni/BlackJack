@@ -10,7 +10,7 @@ packages = [
 ]
 
 [tool.poetry.dependencies]
-python = ">=3.12"
+python = ">=3.11"
 sqlalchemy = ">=2.0.40,<3.0.0"
 psycopg2 = ">=2.9.10,<3.0.0"
 flask = ">=3.1.0,<4.0.0"

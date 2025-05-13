@@ -1,8 +1,8 @@
-DROP DATABASE IF EXISTS BlackJack;
-CREATE DATABASE BlackJack;
-\c BlackJack
+--DROP DATABASE IF EXISTS BlackJack;
+--CREATE DATABASE BlackJack;
+--\c BlackJack
 
-CREATE TABLE user (
+CREATE TABLE "user" (
     username TEXT PRIMARY KEY,
     password TEXT NOT NULL,
     salt TEXT NOT NULL,
@@ -17,7 +17,7 @@ CREATE TABLE gameserver (
 );
 
 CREATE TABLE userserver (
-    username TEXT REFERENCES user(username) ON DELETE CASCADE,
+    username TEXT REFERENCES "user"(username) ON DELETE CASCADE,
     idserver INT REFERENCES gameserver(id) ON DELETE CASCADE,
     PRIMARY KEY (username, idserver)
 );
