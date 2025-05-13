@@ -1,8 +1,8 @@
+from sqlalchemy.exc import SQLAlchemyError
 from src import SessionLocal, engine
 from src.orm.orm import Base, User
 
 Base.metadata.create_all(bind=engine)
-session = SessionLocal()
 
 def add_user(username, password, salt, balance):
     """
@@ -14,10 +14,16 @@ def add_user(username, password, salt, balance):
         balance (float): The balance of the user.
         salt (str): The salt for the password.
     """
-    new_user = User(username=username, password=password, balance=balance, salt=salt)
-    session.add(new_user)
-    session.commit()
-    return "User added successfully"
+    try:
+        new_user = User(username=username, password=password, balance=balance, salt=salt)
+        with SessionLocal() as session:
+            session.add(new_user)
+            session.commit()
+        return True
+    except SQLAlchemyError as e:
+        print(f"Error adding user: {e}")
+        session.rollback()
+        return False
     
 def get_user(username):
     """
@@ -29,5 +35,10 @@ def get_user(username):
     Returns:
         User: The user object if found, None otherwise.
     """
-    user = session.query(User).filter(User.username == username).first()
-    return user
+    try:
+        with SessionLocal() as session:
+            user = session.query(User).filter(User.username == username).first()
+            return user
+    except SQLAlchemyError as e:
+        print(f"Error retrieving user: {e}")
+        return None
