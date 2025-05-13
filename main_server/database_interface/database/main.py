@@ -1,4 +1,4 @@
-from src import create_app, socketio
+from database import create_app, socketio
 
 
 def main():

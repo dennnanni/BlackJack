@@ -1,4 +1,4 @@
-from src.model.database_actions import add_user
+from database.model.database_actions import add_user
 
 
 def test_add_user():

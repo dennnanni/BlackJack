@@ -1,11 +1,11 @@
 from flask import Blueprint, jsonify, request
-from src.model.database_actions import add_user
-from src.model.db_model import User
+from database.model.database_actions import add_user
+from database.model.db_model import User
 
 database_bp = Blueprint('database', __name__)
 
 @database_bp.route('add_user', methods=['POST'])
-def add_user_controller():
+def add_user():
     data = request.get_json()
     user = User(**data)
     result = add_user(**user)

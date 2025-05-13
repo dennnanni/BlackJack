@@ -1,6 +1,6 @@
 from sqlalchemy.exc import SQLAlchemyError
-from src import SessionLocal, engine
-from src.orm.orm import Base, User
+from database import SessionLocal, engine
+from database.orm.orm import Base, User
 
 Base.metadata.create_all(bind=engine)
 
