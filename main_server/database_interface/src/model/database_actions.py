@@ -21,9 +21,9 @@ def add_user(username, password, salt, balance):
             session.commit()
         return True
     except SQLAlchemyError as e:
-        print(f"Error adding user: {e}")
+        print(f'Error adding user: {e}')
         session.rollback()
-        return False
+        return str(e)
     
 def get_user(username):
     """
@@ -40,5 +40,5 @@ def get_user(username):
             user = session.query(User).filter(User.username == username).first()
             return user
     except SQLAlchemyError as e:
-        print(f"Error retrieving user: {e}")
+        print(f'Error retrieving user: {e}')
         return None
