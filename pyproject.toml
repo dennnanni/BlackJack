@@ -1,29 +1,25 @@
-[project]
+[tool.poetry]
 name = "blackjack"
 version = "0.1.0"
 description = ""
-authors = [
-    {name = "Denise Nanni",email = "denise.nanni1@gmail.com"}
-]
+authors = [ "Denise Nanni <denise.nanni1@gmail.com>" ]
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "sqlalchemy (>=2.0.40,<3.0.0)",
-    "psycopg2 (>=2.9.10,<3.0.0)",
-    "flask (>=3.1.0,<4.0.0)",
-    "flask-socketio (>=5.5.1,<6.0.0)"
+packages = [
+    { include = "src", from = "game_server" },
+    { include = "database_interface", from = "main_server" }
 ]
+
+[tool.poetry.dependencies]
+python = ">=3.12"
+sqlalchemy = ">=2.0.40,<3.0.0"
+psycopg2 = ">=2.9.10,<3.0.0"
+flask = ">=3.1.0,<4.0.0"
+flask-socketio = ">=5.5.1,<6.0.0"
 
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
-
-[tool.poetry]
-packages = [
-    { include = "src", from = "game_server" },    
-    { include = "database_interface", from = "main_server" }     
-]
 
 [tool.poetry.scripts]
 database_interface = "database_interface.main:main"
