@@ -13,4 +13,4 @@ def add_user_route():
     if result is True:
         return jsonify(Message.success('User added successfully').to_dict()), HTTPStatus.CREATED
     else:
-        return jsonify(Message.failure(f'Error adding user').to_dict()), HTTPStatus.BAD_REQUEST
+        return jsonify(Message.failure(f'Error adding user: {result}').to_dict()), HTTPStatus.BAD_REQUEST

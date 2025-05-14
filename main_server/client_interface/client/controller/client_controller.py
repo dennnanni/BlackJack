@@ -1,4 +1,3 @@
-from dataclasses import asdict
 import requests
 from main_server.common.structures import User, Message
 
@@ -29,8 +28,10 @@ def add_user(data):
         return message.to_dict()
     
     except requests.HTTPError as e:
-        return Message.failure(f'Error adding user').to_dict()
+        result = e.response.json() if e.response is not None else str(e)
+        return Message.failure(f'{result}').to_dict()
     except requests.RequestException as e:
-        return Message.failure(f': pippo {e}').to_dict()
+        print(f'Error in request: {e}')
+        return Message.failure(f': Something went wrong in adding user').to_dict()
     except ValueError:
         return Message.failure('Server response is not valid').to_dict()

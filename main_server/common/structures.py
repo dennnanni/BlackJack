@@ -16,16 +16,16 @@ class User:
         
 @dataclass
 class Message:
-    success: bool
     message: str
+    success: bool
     
     def to_dict(self):
         return asdict(self)
     
     @classmethod
     def success(cls, message: str):
-        return cls(True, message)
+        return cls(message, True)
     
     @classmethod
     def failure(cls, message: str):
-        return cls(False, message)
+        return cls(message, False)

@@ -42,7 +42,6 @@
         };
 
         socket.emit("add_user", data, (response) => {
-        
             if (response.success) {
                 alert("User successfully added!");
             } else {
