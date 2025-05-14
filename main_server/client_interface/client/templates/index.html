@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <form>
+        <li>
+            <ul>
+                <input type="text" id="username"/>
+            </ul>
+            <ul>
+                <input type="text" id="password"/>
+            </ul>
+            <ul>
+                <input type="text" id="salt"/>
+            </ul>
+            <ul>
+                <input type="number" id="balance"/>
+            </ul>
+            <ul>
+                <input type="submit" id="submit"/>
+            </ul>
+        </li>
+    </form>
+</body>
+
+<script>
+    const socket = io();
+
+    document.getElementById("submit").addEventListener("click", function(event) {
+        event.preventDefault();
+
+        const data = {
+            username: document.getElementById("username").value,
+            password: document.getElementById("password").value,
+            salt: document.getElementById("salt").value,
+            balance: parseFloat(document.getElementById("balance").value)
+        };
+
+        socket.emit("add_user", data, (response) => {
+        
+            if (response.success) {
+                alert("User successfully added!");
+            } else {
+                alert(response.message);
+            }
+        });
+    });
+</script>
+</html>

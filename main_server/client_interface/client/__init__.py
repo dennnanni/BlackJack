@@ -10,8 +10,8 @@ def create_app():
     from .routes import register_routes
     register_routes(app)
     
-    # from .event_handlers import register_event_handlers
-    # register_event_handlers(socketio)
+    from .event_handlers import register_event_handlers
+    register_event_handlers(socketio)
 
     socketio.init_app(app)
     return app
