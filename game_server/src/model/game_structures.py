@@ -1,30 +1,41 @@
 import random
 
 class Table:
-    def __init__(self):
+    MAX_USER_IN_TABLE = 3
+
+    def __init__(self, id):
         self.users = []
+        self.observers = []
+        self.id = id
         self.game = None
-    
+
     def add_user(self, user):
         self.users.append(user)
-        
+
+    def add_observer(self, user):
+        self.observers.append(user)
+
     def remove_user(self, user):
-        self.users.remove(user)
-        
-    def has_users(self):
-        return len(self.users) > 0
-    
-    def get_users(self):
-        return self.users
-    
-    def start_game(self):
-        if self.game is not None:
-            raise Exception("Game already in progress")
-        if not self.has_users():
-            raise Exception("No users in the table")
-        self.game = Game()
-        return self.game
-    
+        if user in self.users:
+            self.users.remove(user)
+        elif user in self.observers:
+            self.observers.remove(user)
+
+    def has_user(self, username):
+        return any(u.get_username() == username for u in self.users + self.observers)
+
+    def is_game_active(self):
+        return self.game is not None
+
+    def is_ready_to_start(self):
+        return len(self.users) == self.MAX_USER_IN_TABLE and self.game is None
+
+    def get_table_id(self):
+        return self.id
+
+    def table_capacity(self):
+        return len(self.users) < self.MAX_USER_IN_TABLE
+
 class Game:
     
     DEALER_STAND_VALUE = 17
@@ -78,7 +89,7 @@ class User:
         self.__username = username  # Nome dell'utente
         self.__balance = balance  # Saldo dell'utente (fiches o denaro)
         self.__cards = []  # Mano dell'utente, inizialmente vuota
-        self.is_connected = False 
+        self.is_playing = False 
 
     def add_card(self, card):
         self.__cards.append(card)
@@ -186,3 +197,35 @@ class Hand:
         """Controlla se la mano è un blackjack (21 con due carte)."""
         return len(hand) == Hand.BLACKJACK_HAND_LENGTH and Hand.get_hand_value(hand) == Hand.BLACKJACK and Hand.has_ace(hand)
         
+        
+class TableManager:
+    def __init__(self):
+        self.tables: list[Table] = []
+        self.user_table_map: dict[str, Table] = {}
+
+    def assign_user_to_table(self, user: User):
+        for table in self.tables:
+            if table.table_capacity() and not table.is_game_active():
+                table.add_user(user)
+                self.user_table_map[user.get_username()] = table
+                return table, True
+
+        
+        for table in self.tables:
+            if table.is_game_active() and not table.has_user(user.get_username()):
+                table.add_observer(user)
+                self.user_table_map[user.get_username()] = table
+                return table, False 
+
+        new_table = Table(f"table_{len(self.tables)+1}")
+        new_table.add_user(user)
+        self.tables.append(new_table)
+        self.user_table_map[user.get_username()] = new_table
+        return new_table, True
+
+    def get_user_table(self, username):
+        return self.user_table_map.get(username)
+
+    def has_user(self, username):
+        return username in self.user_table_map
+
