@@ -7,9 +7,11 @@ readme = "README.md"
 packages = [
     { include = "database_interface", from = "main_server" },
     { include = "client_interface", from = "main_server" },
+    { include = "servers_interface", from = "main_server" },
     { include = "src", from = "game_server" },
     { include = "database", from = "main_server/database_interface" },
-    { include = "client", from = "main_server/client_interface" }
+    { include = "client", from = "main_server/client_interface" },
+    { include = "servers", from = "main_server/servers_interface" }
 ]
 
 [tool.poetry.dependencies]
@@ -28,6 +30,7 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.scripts]
 database = "database_interface.database.main:main"
 client = "client_interface.client.main:main"
+servers = "servers_interface.servers.main:main"
 game_server = "game_server.src.main:main"
 
 [tool.poetry.group.dev.dependencies]
