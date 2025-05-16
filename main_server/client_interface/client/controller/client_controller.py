@@ -1,12 +1,13 @@
 import base64
+from dataclasses import asdict
 import hashlib
 import secrets
 import requests
-from main_server.common.structures import RedirectionMessage, UserLogin, UserDatabase, Message
+from main_server.common.structures import RedirectionMessage, UserInfo, UserLogin, UserDatabase, Message
 
 database_url = 'http://localhost:5001'
 
-def validate_user_input(data):
+def validate_user_login_input(data):
     try:
         user = UserLogin(**data)
         if not user.is_valid:
@@ -14,8 +15,43 @@ def validate_user_input(data):
         return user, None
     except TypeError as e:
         return None, Message.failure(f'Wrong or missing data: {e}').to_dict()
+    
+def get_request(endpoint, params=None):
+    """
+    Performs a GET request to the database server.
+
+    Args:
+        endpoint (str): API path.
+        params (dict, optional): Params to include in query string.
+
+    Returns:
+        tuple: (JSON response as dict, error as dict if present)
+    """
+    try:
+        response = requests.get(f'{database_url}/{endpoint}', params=params)
+        response.raise_for_status()
+        return response.json(), None
+    except requests.HTTPError as e:
+        print(f'HTTP error: {e.response}')
+        return None, Message.failure('HTTP error').to_dict()
+    except requests.RequestException as e:
+        print(f'Request exception: {e}')
+        return None, Message.failure('Something went wrong while contacting the server').to_dict()
+    except ValueError:
+        return None, Message.failure('Server response is not valid').to_dict()
+
 
 def post_request(endpoint, json_data):
+    """
+    PErforms a POST request to the database server.
+
+    Args:
+        endpoint (str): API path.
+        json_data (dict): JSON data to send.
+
+    Returns:
+        tuple: (JSON response as dict, error as dict if present)
+    """
     try:
         response = requests.post(f'{database_url}/{endpoint}', json=json_data)
         response.raise_for_status()
@@ -30,7 +66,7 @@ def post_request(endpoint, json_data):
         return None, Message.failure('Server response is not valid').to_dict()
 
 def login_user(data):
-    user, error = validate_user_input(data)
+    user, error = validate_user_login_input(data)
     if error:
         return error
 
@@ -56,7 +92,7 @@ def login_user(data):
     return message.to_dict()
 
 def register_user(data):
-    user, error = validate_user_input(data)
+    user, error = validate_user_login_input(data)
     if error:
         return error
 
@@ -82,3 +118,23 @@ def generate_hashed_password(password):
     salt_b64 = base64.b64encode(salt).decode('utf-8')
     hashed_password = get_hashed_password(password, salt)
     return hashed_password, salt_b64
+
+def get_user_info(data):
+    username = data.get('username')
+    if not username:
+        return Message.failure('Username is required').to_dict()
+
+    user_info_response, error = get_request('/get_user_info', {'username': username})
+    if error:
+        return error
+    
+    try:
+        user_info = UserInfo(**user_info_response)
+        return user_info.to_dict()
+    except TypeError as e:
+        # Handle the case where response is message instead of user info
+        return user_info
+    
+
+def choose_server(data):
+    pass

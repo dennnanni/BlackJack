@@ -1,7 +1,7 @@
 from http import HTTPStatus
 from flask import Blueprint, jsonify, request
 from database.model.database_actions import add_user, get_user
-from main_server.common.structures import UserDatabase, Message, UserLogin
+from main_server.common.structures import UserDatabase, Message, UserInfo, UserLogin
 
 database_bp = Blueprint('database', __name__)
 
@@ -39,3 +39,15 @@ def login_user_route():
     else:
         print(f'Wrong password for user: {user.username}')
         return jsonify(Message.failure(f'Wrong password').to_dict()), HTTPStatus.BAD_REQUEST
+    
+@database_bp.route('/get_user_info', methods=['GET'])
+def get_user_info_route():
+    username = request.args.get('username')
+    if not username:
+        return jsonify(Message.failure('Username is required').to_dict()), HTTPStatus.BAD_REQUEST
+    
+    user = get_user(username)
+    if user:
+        return jsonify(UserInfo(user.username, user.balance).to_dict()), HTTPStatus.OK
+    else:
+        return jsonify(Message.failure('User not found').to_dict()), HTTPStatus.NOT_FOUND
