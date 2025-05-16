@@ -2,7 +2,6 @@ import base64
 import hashlib
 import secrets
 import requests
-from database.orm.orm import User
 from main_server.common.structures import RedirectionMessage, UserLogin, UserDatabase, Message
 
 database_url = 'http://localhost:5001'
@@ -53,7 +52,7 @@ def login_user(data):
 
     message = Message(**login_response)
     if message.success:
-        return RedirectionMessage.success('Login successful!', f'/{user.username}').to_dict()
+        return RedirectionMessage.success('Login successful!', f'/user/{user.username}').to_dict()
     return message.to_dict()
 
 def register_user(data):
