@@ -38,7 +38,6 @@
                     document.getElementById('username').innerText = response.data.username;
                     document.getElementById('balance').innerText = "$" + response.data.balance;
                 } else {
-                    console.error("Error fetching user data:", response);
                     console.error("Message:", response.message);
                 }
             });
@@ -51,10 +50,10 @@
                 username: '{{username}}'
             }, (response) => {
                 if (response.success) {
-                    alert("Found table! " + response.data.redirect);
-                    window.location.replace(response.data.redirect);
+                    alert("Found table! " + response.redirect);
+                    window.location.replace(response.redirect);
                 } else {
-                    console.error("Error finding table:", response.data.message);
+                    console.error("Error finding table:", response.message);
                 }
             });
         });
