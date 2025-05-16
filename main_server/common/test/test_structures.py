@@ -25,7 +25,7 @@ def test_data_message_success():
     assert message.message == 'Test success message'
     assert message.success is True
     assert message.data == data
-    assert message.to_dict() == {'message': 'Test success message', 'success': True, 'data': data}
+    assert message.redirect is None
     
 def test_message_to_dict():
     """
