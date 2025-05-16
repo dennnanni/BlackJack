@@ -4,6 +4,14 @@ import secrets
 import requests
 from main_server.common.structures import UserInfo, UserLogin, UserDatabase, Message
 
+routes = {
+    'login': '/login',
+    'register': '/register',
+    'get_user_info': '/get_user_info',
+    'get_salt': '/get_salt',
+    'user_homepage': '/user/',
+}
+
 database_url = 'http://localhost:5001'
 
 def validate_user_login_input(data):
@@ -69,7 +77,7 @@ def login_user(data):
     if error:
         return error
 
-    salt_response, error = post_request('get_salt', user.username)
+    salt_response, error = post_request(routes['get_salt'], user.username)
     if error:
         return error
 
@@ -81,13 +89,13 @@ def login_user(data):
     hashed_password = get_hashed_password(user.password, salt)
     login_data = UserLogin(username=user.username, password=hashed_password).to_dict()
 
-    login_response, error = post_request('login', login_data)
+    login_response, error = post_request(routes['login'], login_data)
     if error:
         return error
 
     message = Message(**login_response)
     if message.success:
-        return Message.success(redirect=f'/user/{user.username}').to_dict()
+        return Message.success(redirect=f'{routes['user_homepage']}{user.username}').to_dict()
     return message.to_dict()
 
 def register_user(data):
@@ -98,13 +106,13 @@ def register_user(data):
     hashed_password, salt = generate_hashed_password(user.password)
     user_db = UserDatabase(username=user.username, password=hashed_password, salt=salt, balance=0.0)
 
-    register_response, error = post_request('register', user_db.to_dict())
+    register_response, error = post_request(routes['register'], user_db.to_dict())
     if error:
         return error
 
     message = Message(**register_response)
     if message.success:
-        return Message.success(redirect=f'/{user.username}').to_dict()
+        return Message.success(redirect=f'{routes['register']}{user.username}').to_dict()
     return message.to_dict()
 
 def get_hashed_password(password, salt):
@@ -123,16 +131,11 @@ def get_user_info(data):
     if not username:
         return Message.failure('Username is required').to_dict()
 
-    user_info_response, error = get_request('/get_user_info', {'username': username})
+    user_info_response, error = get_request(routes['get_user_info'], {'username': username})
     if error:
         return error
     
-    try:
-        user_info = UserInfo(**user_info_response)
-        return Message.success(data=user_info.to_dict())
-    except TypeError as e:
-        # Handle the case where response is message instead of user info
-        return user_info
+    return user_info_response
     
 
 def choose_server(data):
