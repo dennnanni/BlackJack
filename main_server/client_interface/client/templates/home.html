@@ -46,7 +46,7 @@
         document.getElementById('btnPlay').addEventListener('click', () => {
             console.log("Searching for table!");
             
-            socket.emit('get_table', {
+            socket.emit('get_game_server', {
                 username: '{{username}}'
             }, (response) => {
                 if (response.success) {
