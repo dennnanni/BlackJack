@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass
+from typing import Optional
 
 from database.orm.orm import User
 
@@ -48,42 +49,16 @@ class UserDatabase(UserInfo):
 class Message:
     success: bool
     message: str
-    
+    data: Optional[dict] = None
+    redirect: Optional[str] = None
+
     def to_dict(self):
         return asdict(self)
-    
-    @classmethod
-    def success(cls, message: str):
-        return cls(message=message, success=True)
-    
-    @classmethod
-    def failure(cls, message: str):
-        return cls(message=message, success=False)
 
-@dataclass(kw_only=True)
-class DataMessage(Message):
-    data: dict
-    
-    def to_dict(self):
-        return asdict(self)
-    
     @classmethod
-    def success(cls, message: str, data: dict):
-        return cls(message=message, success=True, data=data)
-    
-    @classmethod
-    def failure(cls, message: str, data: dict):
-        return cls(message=message, success=False, data=data)
-    
+    def success(cls, message: str = '', data: dict = None, redirect: str = None):
+        return cls(success=True, message=message, data=data, redirect=redirect)
 
-@dataclass(kw_only=True)
-class RedirectionMessage(Message):
-    redirect: str
-    
     @classmethod
-    def success(cls, message: str, redirect: str):
-        return cls(message=message, success=True, redirect=redirect)
-    
-    @classmethod
-    def failure(cls, message: str, redirect: str):
-        return cls(message=message, success=False, redirect=redirect)
+    def failure(cls, message: str, redirect: str = None):
+        return cls(success=False, message=message, redirect=redirect)

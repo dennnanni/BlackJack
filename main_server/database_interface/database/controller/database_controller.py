@@ -25,7 +25,7 @@ def get_salt_route():
     
     user = get_user(username)
     if user:
-        return jsonify({'salt': user.salt}), HTTPStatus.OK
+        return jsonify(Message.success(data={'salt': user.salt})), HTTPStatus.OK
     else:
         return jsonify(Message.failure('User not found').to_dict()), HTTPStatus.NOT_FOUND
     
@@ -48,6 +48,6 @@ def get_user_info_route():
     
     user = get_user(username)
     if user:
-        return jsonify(UserInfo(user.username, user.balance).to_dict()), HTTPStatus.OK
+        return jsonify(Message.success(data=UserInfo(user.username, user.balance).to_dict()).to_dict()), HTTPStatus.OK
     else:
         return jsonify(Message.failure('User not found').to_dict()), HTTPStatus.NOT_FOUND

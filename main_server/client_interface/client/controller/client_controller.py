@@ -1,9 +1,8 @@
 import base64
-from dataclasses import asdict
 import hashlib
 import secrets
 import requests
-from main_server.common.structures import RedirectionMessage, UserInfo, UserLogin, UserDatabase, Message
+from main_server.common.structures import UserInfo, UserLogin, UserDatabase, Message
 
 database_url = 'http://localhost:5001'
 
@@ -88,7 +87,7 @@ def login_user(data):
 
     message = Message(**login_response)
     if message.success:
-        return RedirectionMessage.success('Login successful!', f'/user/{user.username}').to_dict()
+        return Message.success(redirect=f'/user/{user.username}').to_dict()
     return message.to_dict()
 
 def register_user(data):
@@ -105,7 +104,7 @@ def register_user(data):
 
     message = Message(**register_response)
     if message.success:
-        return RedirectionMessage.success('Registration successful!', f'/{user.username}').to_dict()
+        return Message.success(redirect=f'/{user.username}').to_dict()
     return message.to_dict()
 
 def get_hashed_password(password, salt):
@@ -130,7 +129,7 @@ def get_user_info(data):
     
     try:
         user_info = UserInfo(**user_info_response)
-        return user_info.to_dict()
+        return Message.success(data=user_info.to_dict())
     except TypeError as e:
         # Handle the case where response is message instead of user info
         return user_info
