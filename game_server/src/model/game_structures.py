@@ -4,46 +4,63 @@ class Table:
     MAX_USER_IN_TABLE = 3
 
     def __init__(self, id):
-        self.users = []
-        self.observers = []
-        self.id = id
-        self.game = None
+        self.__users = []
+        self.__observers = []
+        self.__id = id
+        self.__game = None
 
     def add_user(self, user):
-        self.users.append(user)
+        self.__users.append(user)
 
     def add_observer(self, user):
-        self.observers.append(user)
+        self.__observers.append(user)
 
     def remove_user(self, user):
-        if user in self.users:
-            self.users.remove(user)
-        elif user in self.observers:
-            self.observers.remove(user)
+        if user in self.__users:
+            self.__users.remove(user)
+        elif user in self.__observers:
+            self.__observers.remove(user)
 
     def has_user(self, username):
-        return any(u.get_username() == username for u in self.users + self.observers)
+        return any(u.get_username() == username for u in self.__users + self.__observers)
 
     def is_game_active(self):
-        return self.game is not None
+        return self.__game is not None
 
     def is_ready_to_start(self):
-        return len(self.users) == self.MAX_USER_IN_TABLE and self.game is None
+        return len(self.__users) > 0 and self.__game is None
 
     def get_table_id(self):
-        return self.id
+        return self.__id
+    
+    def get_users(self):
+        return self.__users
+    
+    def set_game(self, game):
+        self.__game = game
+        
+    def get_game(self):
+        return self.__game
 
-    def table_capacity(self):
-        return len(self.users) < self.MAX_USER_IN_TABLE
+    def clear_game(self):
+        for u in self.__observers:
+            self.add_user(u)
+        self.__observers = []
+        self.__game = None
+
+    def table_is_not_full(self):
+        return len(self.__users + self.__observers) < self.MAX_USER_IN_TABLE
 
 class Game:
     
     DEALER_STAND_VALUE = 17
     
-    def __init__(self, players):
+    def __init__(self, players, deck):
         self.__dealer_hand: list[Card] = []
         self.__active_users: list[User] = players
         self.__bets: dict[User, float] = {}
+        self.__finished_users: list[User] = []
+        self.__deck = deck
         
     def get_users(self):
         """Restituisce la lista degli utenti attivi."""
@@ -83,13 +100,37 @@ class Game:
         return not Hand.is_busted(user.get_hand()) and \
             Hand.get_hand_value(self.__dealer_hand) < Hand.get_hand_value(user.get_hand()) or \
             Hand.is_blackjack(user.get_hand()) and not Hand.is_blackjack(self.__dealer_hand)
+            
+
+    def player_stand(self, user):
+        self.__finished_users.append(user)
+
+    def player_double_down(self, user):
+        self.place_bet(user, self.__bets[user] * 2)
+        user.add_card(self.__deck.draw_card())
+        self.remove_active_user(user)
+
+    
+    def remove_active_user(self, user):
+        if user in self.__active_users:
+            self.__active_users.remove(user)
+            
+    def get_active_users(self):
+        return self.__active_users
+
+    def get_dealer_hand(self):
+        return self.__dealer_hand
+
+
     
 class User:
     def __init__(self, username, balance):
         self.__username = username  # Nome dell'utente
         self.__balance = balance  # Saldo dell'utente (fiches o denaro)
         self.__cards = []  # Mano dell'utente, inizialmente vuota
-        self.is_playing = False 
+        self.__hands = [[]]  # Lista di mani, inizialmente una sola
+        self.__active_hand_index = 0  # Indica quale mano è in gioco
+
 
     def add_card(self, card):
         self.__cards.append(card)
@@ -199,33 +240,36 @@ class Hand:
         
         
 class TableManager:
+    
+    MAX_NUMBER_OF_TABLE = 3
+    
     def __init__(self):
-        self.tables: list[Table] = []
-        self.user_table_map: dict[str, Table] = {}
+        self.__tables: list[Table] = []
+        self.__user_table_map: dict[str, Table] = {}
 
     def assign_user_to_table(self, user: User):
-        for table in self.tables:
-            if table.table_capacity() and not table.is_game_active():
+        for table in self.__tables:
+            if table.table_is_not_full() and not table.is_game_active():
                 table.add_user(user)
-                self.user_table_map[user.get_username()] = table
+                self.__user_table_map[user.get_username()] = table
                 return table, True
 
         
-        for table in self.tables:
+        for table in self.__tables:
             if table.is_game_active() and not table.has_user(user.get_username()):
                 table.add_observer(user)
-                self.user_table_map[user.get_username()] = table
+                self.__user_table_map[user.get_username()] = table
                 return table, False 
 
-        new_table = Table(f"table_{len(self.tables)+1}")
+        new_table = Table(f"table_{len(self.__tables)+1}")
         new_table.add_user(user)
-        self.tables.append(new_table)
-        self.user_table_map[user.get_username()] = new_table
+        self.__tables.append(new_table)
+        self.__user_table_map[user.get_username()] = new_table
         return new_table, True
 
     def get_user_table(self, username):
-        return self.user_table_map.get(username)
+        return self.__user_table_map.get(username)
 
     def has_user(self, username):
-        return username in self.user_table_map
+        return username in self.__user_table_map
 
