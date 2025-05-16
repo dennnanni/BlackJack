@@ -42,3 +42,4 @@ def get_user(username):
     except SQLAlchemyError as e:
         print(f'Error retrieving user: {e}')
         return None
+    

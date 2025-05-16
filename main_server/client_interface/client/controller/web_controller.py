@@ -2,6 +2,10 @@ from flask import Blueprint, render_template
 
 client_bp = Blueprint('client_interface', __name__)
 
-@client_bp.route('/')
-def index():
-    return render_template('index.html')
+@client_bp.route('/<username>')
+def index(username):
+    return render_template('home.html', username=username)
+
+@client_bp.route('/login')
+def login():
+    return render_template('login.html')
