@@ -115,8 +115,6 @@
 				if (response.success) {
 					alert('Registration successful!');
 					window.location.href = response.redirect;
-				} else if (response.error === 'username_taken') {
-					alert('Username already taken.');
 				} else {
 					alert('Registration error: ' + response.message);
 				}
