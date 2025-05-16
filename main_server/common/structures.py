@@ -59,6 +59,21 @@ class Message:
     @classmethod
     def failure(cls, message: str):
         return cls(message=message, success=False)
+
+@dataclass(kw_only=True)
+class DataMessage(Message):
+    data: dict
+    
+    def to_dict(self):
+        return asdict(self)
+    
+    @classmethod
+    def success(cls, message: str, data: dict):
+        return cls(message=message, success=True, data=data)
+    
+    @classmethod
+    def failure(cls, message: str, data: dict):
+        return cls(message=message, success=False, data=data)
     
 
 @dataclass(kw_only=True)

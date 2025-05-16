@@ -1,4 +1,4 @@
-from common.structures import Message, UserDatabase
+from common.structures import DataMessage, Message, UserDatabase
 
 def test_message_success():
     """
@@ -15,6 +15,17 @@ def test_message_failure():
     message = Message.failure('Test failure message')
     assert message.message == 'Test failure message'
     assert message.success is False
+    
+def test_data_message_success():
+    """
+    Test the success method of the DataMessage class.
+    """
+    data = {'key': 'value'}
+    message = DataMessage.success('Test success message', data)
+    assert message.message == 'Test success message'
+    assert message.success is True
+    assert message.data == data
+    assert message.to_dict() == {'message': 'Test success message', 'success': True, 'data': data}
     
 def test_message_to_dict():
     """
@@ -34,3 +45,4 @@ def test_user_is_valid():
     
     user_invalid = UserDatabase(username='', password='test_password', salt='test_salt', balance=0.0)
     assert user_invalid.is_valid() is False
+    
