@@ -14,6 +14,9 @@ class Table:
 
     def add_observer(self, user):
         self.__observers.append(user)
+        
+    def all_players_have_bet(self):
+        return self.__game.get_bet() == self.__users
 
     def remove_user(self, user):
         if user in self.__users:
