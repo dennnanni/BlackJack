@@ -77,4 +77,6 @@ class GameLoop(Thread):
                 update_user_balance(r.username, r.balanceDifference)
 
             self.table.clear_game()
+        
+        self.running = False
 

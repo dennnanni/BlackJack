@@ -14,11 +14,15 @@ def register_event_handlers(socketio):
         balance = data["balance"]
         user = User(username, balance)
         user_map[username] = user
-        table, is_player = table_manager.assign_user_to_table(user)
+        table, is_player = table_manager.assign_user_to_table(user)#voglio far diventare isPlayer true se può entrare nel server, false altrimenti
         
         emit("joined", {"table_id": table.get_table_id(), "is_player": is_player})
         if table.is_ready_to_start():
-            table_game_map.pop(table.get_table_id, GameLoop(table).start())
+            table_id = table.get_table_id()
+            game_loop = GameLoop(table)
+            table_game_map[table_id] = game_loop
+            game_loop.start()
+
 
     @socketio.on("bet")
     def handle_bet(data):
@@ -26,13 +30,16 @@ def register_event_handlers(socketio):
         amount = float(data["amount"])
         user = user_map[username]
         table = table_manager.get_user_table(username)
-        if not table or not table.game:
+        if not table or not table.get_game():
             emit("error", {"message": "No active game"})
             return
 
         try:
-            if table.game.place_bet(user, amount):
-                table_game_map.get(table.get_table_id).bets_done_event.set()
+            if table.get_game().place_bet(user, amount):
+                game_loop = table_game_map.get(table.get_table_id())
+                if game_loop:
+                    game_loop.bets_done_event.set()
+
             
             emit("bet_confirmed", {"user": username, "amount": amount}, broadcast=True)
         except Exception as e:
@@ -43,34 +50,38 @@ def register_event_handlers(socketio):
         username = data['username']
         user = user_map[username]
         action = data['action']  # 'hit', 'stand', 'double'
-        
         table = table_manager.get_user_table(username)
+        game = table.get_game()
+        
         if not table or not table.is_game_active():
+            emit("error", {"message": "No active game"})
             return
 
-        game = table.get_game()
         user = next((u for u in game.get_users() if u.get_username() == username), None)
         if not user:
             return
 
         if action == 'hit':
-            user.add_card(game.get_deck().draw_card())  # accedi al deck privato
+            card = game.get_deck().draw_card()
+            user.add_card(card)
+            emit("card_drawn", {"user": username, "card": str(card)}, broadcast=True, include_self=True)
             if Hand.is_busted(user.get_hand()):
                 game.remove_active_user(user)
-                socketio.emit('player_busted', {'user': username})
+                socketio.emit('player_busted', {'user': username}, broadcast = True, include_self=True)
         elif action == 'stand':
-            game.player_stand(user)
+            game.remove_active_user(user)
+            emit("user_stood", {"user": username}, broadcast=True, include_self=True)
         elif action == 'double':
             try:
-                game.player_double_down(user)
+                card = game.player_double_down(user)
+                emit("user_doubled", {
+                "user": username,
+                "card": str(card)
+                }, broadcast=True, include_self=True)
             except ValueError as e:
                 socketio.emit('error', {'user': username, 'message': str(e)})
                 
         if table.get_game().all_players_done():
-            table_game_map.get(table.get_table_id).actions_done_event.set()
-
-        socketio.emit('player_action_done', {
-            'user': username,
-            'hand': [str(c) for c in user.get_hand()]
-        })
+            table_game_map.get(table.get_table_id()).actions_done_event.set()
+            socketio.emit('player_action_done', broadcast=True, include_self=True)
 
