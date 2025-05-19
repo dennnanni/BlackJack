@@ -29,14 +29,14 @@
 						<div class="tab-content" id="authTabsContent">
 							<!-- Login Tab -->
 							<div class="tab-pane fade show active" id="login" role="tabpanel">
-								<form id="loginForm">
+								<form id="loginForm" method="POST" action="/login">
 									<div class="mb-3">
 										<label for="loginUsername" class="form-label">Username</label>
-										<input type="text" class="form-control" id="loginUsername" required>
+										<input type="text" class="form-control" name="username" id="loginUsername" required>
 									</div>
 									<div class="mb-3">
 										<label for="loginPassword" class="form-label">Password</label>
-										<input type="password" class="form-control" id="loginPassword" required>
+										<input type="password" class="form-control" name="password" id="loginPassword" required>
 									</div>
 									<button type="submit" class="btn btn-primary w-100">Log in</button>
 								</form>
@@ -44,14 +44,14 @@
 
 							<!-- Register Tab -->
 							<div class="tab-pane fade" id="register" role="tabpanel">
-								<form id="registerForm">
+								<form id="registerForm" method="POST" action="/register">
 									<div class="mb-3">
 										<label for="registerUsername" class="form-label">Username</label>
-										<input type="text" class="form-control" id="registerUsername" required>
+										<input type="text" class="form-control" name="username" id="registerUsername" required>
 									</div>
 									<div class="mb-3">
 										<label for="registerPassword" class="form-label">Password</label>
-										<input type="password" class="form-control" id="registerPassword" required>
+										<input type="password" class="form-control" name="password" id="registerPassword" required>
 									</div>
 									<div class="mb-3">
 										<label for="registerConfirmPassword" class="form-label">Confirm password</label>
@@ -77,7 +77,7 @@
 		socket.on('connect', () => {
 			console.log('Connected to server');
 		});
-
+/*
 		document.getElementById('loginForm').addEventListener('submit', function (e) {
 			e.preventDefault();
 			const username = document.getElementById('loginUsername').value;
@@ -119,7 +119,7 @@
 					alert('Registration error: ' + response.message);
 				}
 			});
-		});
+		}); */
 	</script>
 </body>
 
