@@ -65,7 +65,9 @@ class Game:
     def get_users(self):
         """Restituisce la lista degli utenti attivi."""
         return self.__active_users
-        
+    
+    def get_deck(self):
+        return self.__deck
     def add_dealer_card(self, card):
         """Aggiunge una carta alla mano del dealer."""
         if Hand.is_busted(self.__dealer_hand) or Hand.is_blackjack(self.__dealer_hand) or Hand.get_hand_value(self.__dealer_hand) >= self.DEALER_STAND_VALUE:
@@ -79,6 +81,7 @@ class Game:
         if bet > user.get_balance():
             raise ValueError("Bet exceeds user's balance")
         self.__bets[user] = bet
+        return len(self.__bets) == len(self.__active_users)
     
     def determine_result(self):
         results: list[Result] = []
@@ -121,16 +124,14 @@ class Game:
     def get_dealer_hand(self):
         return self.__dealer_hand
 
-
+    def all_players_done(self):
+        return len(self.__finished_users) == len(self.__active_users)
     
 class User:
     def __init__(self, username, balance):
         self.__username = username  # Nome dell'utente
         self.__balance = balance  # Saldo dell'utente (fiches o denaro)
         self.__cards = []  # Mano dell'utente, inizialmente vuota
-        self.__hands = [[]]  # Lista di mani, inizialmente una sola
-        self.__active_hand_index = 0  # Indica quale mano è in gioco
-
 
     def add_card(self, card):
         self.__cards.append(card)
@@ -153,7 +154,6 @@ class User:
 
     def __str__(self):
         return f"User: {self.__username}, Balance: {self.__balance}, Hand: {self.__cards}"
-
     
 class Deck:
     def __init__(self, num_decks=1):
@@ -238,7 +238,6 @@ class Hand:
         """Controlla se la mano è un blackjack (21 con due carte)."""
         return len(hand) == Hand.BLACKJACK_HAND_LENGTH and Hand.get_hand_value(hand) == Hand.BLACKJACK and Hand.has_ace(hand)
         
-        
 class TableManager:
     
     MAX_NUMBER_OF_TABLE = 3
@@ -259,7 +258,7 @@ class TableManager:
             if table.is_game_active() and not table.has_user(user.get_username()):
                 table.add_observer(user)
                 self.__user_table_map[user.get_username()] = table
-                return table, False 
+                return table, True 
 
         new_table = Table(f"table_{len(self.__tables)+1}")
         new_table.add_user(user)
