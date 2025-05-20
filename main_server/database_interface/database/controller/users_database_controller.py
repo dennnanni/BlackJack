@@ -16,10 +16,9 @@ def register_user_route():
         print(f'Error adding user: {result}')
         return jsonify(Message.failure(f'Error adding user: {result}').to_dict()), HTTPStatus.BAD_REQUEST
 
-@users_routes_bp.route('/salt', methods=['POST'])
+@users_routes_bp.route('/salt', methods=['GET'])
 def get_salt_route():
-    data = request.get_json()
-    username = data
+    username = request.args.get('username')
     if not username:
         return jsonify(Message.failure('Username is required').to_dict()), HTTPStatus.BAD_REQUEST
     

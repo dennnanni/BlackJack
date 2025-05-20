@@ -1,6 +1,6 @@
+from client.constants import USER_INFO_API_ENDPOINT
 from client.controller.api_client import get_request
 from main_server.common.structures import Message
-from client.controller.api_client import db_api_routes
 
 
 def get_user_info(data):
@@ -8,7 +8,7 @@ def get_user_info(data):
     if not username:
         return Message.failure('Username is required').to_dict()
 
-    user_info_response, error = get_request(db_api_routes['get_user_info'], {'username': username})
+    user_info_response, error = get_request(USER_INFO_API_ENDPOINT, {'username': username})
     if error:
         return error
     
