@@ -708,7 +708,7 @@ files = [
 ]
 
 [package.extras]
-brotli = ["brotli (>=1.0.9)", "brotlicffi (>=0.8.0)"]
+brotli = ["brotli (>=1.0.9) ; platform_python_implementation == \"CPython\"", "brotlicffi (>=0.8.0) ; platform_python_implementation != \"CPython\""]
 h2 = ["h2 (>=4,<5)"]
 socks = ["pysocks (>=1.5.6,!=1.5.7,<2.0)"]
 zstd = ["zstandard (>=0.18.0)"]
@@ -749,4 +749,4 @@ h11 = ">=0.9.0,<1"
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.11"
-content-hash = "0797b77b6f711dfebc405f5f69a980ad9b344f82a6b6ff93bb1521288812035c"
+content-hash = "5b99797bdf88a3e0b883476cebf3bde731b2ba32d52c129f52ead5d51153e6e1"
