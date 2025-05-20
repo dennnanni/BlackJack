@@ -11,6 +11,20 @@
 <body class="bg-light">
 
 	<div class="container mt-5">
+		<!-- Banner di errore -->
+		{% if error %}
+		<div class="row justify-content-center mb-3">
+			<div class="col-md-6">
+				<div class="alert alert-danger alert-dismissible fade show rounded-3" role="alert">
+					<strong>Errore:</strong> {{ error }}
+					<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+				</div>
+			</div>
+		</div>
+		{% endif %}
+	</div>
+
+	<div class="container mt-5">
 		<div class="row justify-content-center">
 			<div class="col-md-6">
 				<div class="card shadow rounded-4">
@@ -29,14 +43,14 @@
 						<div class="tab-content" id="authTabsContent">
 							<!-- Login Tab -->
 							<div class="tab-pane fade show active" id="login" role="tabpanel">
-								<form id="loginForm">
+								<form id="loginForm" method="POST" action="/login">
 									<div class="mb-3">
 										<label for="loginUsername" class="form-label">Username</label>
-										<input type="text" class="form-control" id="loginUsername" required>
+										<input type="text" class="form-control" name="username" id="loginUsername" required>
 									</div>
 									<div class="mb-3">
 										<label for="loginPassword" class="form-label">Password</label>
-										<input type="password" class="form-control" id="loginPassword" required>
+										<input type="password" class="form-control" name="password" id="loginPassword" required>
 									</div>
 									<button type="submit" class="btn btn-primary w-100">Log in</button>
 								</form>
@@ -44,14 +58,14 @@
 
 							<!-- Register Tab -->
 							<div class="tab-pane fade" id="register" role="tabpanel">
-								<form id="registerForm">
+								<form id="registerForm" method="POST" action="/register">
 									<div class="mb-3">
 										<label for="registerUsername" class="form-label">Username</label>
-										<input type="text" class="form-control" id="registerUsername" required>
+										<input type="text" class="form-control" name="username" id="registerUsername" required>
 									</div>
 									<div class="mb-3">
 										<label for="registerPassword" class="form-label">Password</label>
-										<input type="password" class="form-control" id="registerPassword" required>
+										<input type="password" class="form-control" name="password" id="registerPassword" required>
 									</div>
 									<div class="mb-3">
 										<label for="registerConfirmPassword" class="form-label">Confirm password</label>
@@ -76,49 +90,6 @@
 
 		socket.on('connect', () => {
 			console.log('Connected to server');
-		});
-
-		document.getElementById('loginForm').addEventListener('submit', function (e) {
-			e.preventDefault();
-			const username = document.getElementById('loginUsername').value;
-			const password = document.getElementById('loginPassword').value;
-			console.log('Login:', username, password);
-
-			socket.emit('login', { username, password }, (response) => {
-				if (response.success) {
-					console.log('Login successful:', response);
-					window.location.href = response.redirect;
-				} else if (response.error === 'invalid_credentials') {
-					alert('Invalid username or password.');
-				} else {
-					alert('Login error: ' + response.message);
-				}
-			});
-
-		});
-
-		document.getElementById('registerForm').addEventListener('submit', function (e) {
-			e.preventDefault();
-			const username = document.getElementById('registerUsername').value;
-			const password = document.getElementById('registerPassword').value;
-			const confirmPassword = document.getElementById('registerConfirmPassword').value;
-
-			if (password !== confirmPassword) {
-				alert('Passwords don\'t match.');
-				return;
-			}
-
-			console.log('Registrazione:', username);
-
-
-			socket.emit('register', { username, password }, (response) => {
-				if (response.success) {
-					alert('Registration successful!');
-					window.location.href = response.redirect;
-				} else {
-					alert('Registration error: ' + response.message);
-				}
-			});
 		});
 	</script>
 </body>
