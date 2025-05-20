@@ -8,7 +8,7 @@ from flask import Blueprint, jsonify
 
 servers_routes_bp = Blueprint('servers_db', __name__)
 
-@servers_routes_bp.route('/active', methods=['GET'])
+@servers_routes_bp.route('/load', methods=['GET'])
 def get_active_servers_route():
     """
     Route to get the list of servers with related connected user count.
