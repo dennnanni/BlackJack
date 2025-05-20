@@ -86,3 +86,13 @@ class Server:
             connected_users=data["connected_users"],
             max_users=data["max_users"]
         )
+        
+    @staticmethod
+    def from_tuple(data):
+        return Server(
+            id=data[0],
+            ip=data[1],
+            port=data[2],
+            connected_users=data[3],
+            max_users=data[4]
+        )
