@@ -62,3 +62,25 @@ class Message:
     @classmethod
     def failure(cls, message: str, redirect: str = None):
         return cls(success=False, message=message, redirect=redirect)
+    
+@dataclass
+class Server:
+    id: str
+    ip: str
+    port: int
+    connected_users: int
+    max_users: int
+
+
+    def to_dict(self):
+        return asdict(self)
+
+    @staticmethod
+    def from_dict(data):
+        return Server(
+            id=data["id"],
+            ip=data["ip"],
+            port=data["port"],
+            connected_users=data["connected_users"],
+            max_users=data["max_users"]
+        )
