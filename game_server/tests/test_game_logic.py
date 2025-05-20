@@ -1,4 +1,4 @@
-from game_server.src.model.game_structures import Card, Hand, Game, User
+from src.model.game_structures import Card, Hand, Game, User, Deck
 import pytest
 
 DEFAULT_SUIT = 'Hearts'
@@ -34,7 +34,7 @@ def test_has_ace():
     
 def test_determine_difference():
     users = [User("User1", 200), User("User2", 200), User("User3", 200)]
-    game = Game(users)
+    game = Game(users, Deck())
     
     game.place_bet(users[0], 100)
     game.place_bet(users[1], 200)
@@ -58,13 +58,13 @@ def test_determine_difference():
     
 def test_user_cannot_place_bet_more_than_balance():
     user = User("User1", 200)
-    game = Game([user])
+    game = Game([user], Deck())
     with pytest.raises(ValueError) as exc_info:
         game.place_bet(user, 300)
     assert str(exc_info.value) == "Bet exceeds user's balance"
     
 def test_dealer_cannot_add_more_cards():
-    game = Game([User("User1", 200)])
+    game = Game([User("User1", 200)], Deck())
     game.add_dealer_card(Card('2', DEFAULT_SUIT))
     game.add_dealer_card(Card('Q', DEFAULT_SUIT))
     game.add_dealer_card(Card('K', DEFAULT_SUIT))
@@ -74,7 +74,7 @@ def test_dealer_cannot_add_more_cards():
     
 def test_is_winner():
     user = User("User1", 200)
-    game = Game([user])
+    game = Game([user], Deck())
     
     user.add_card(Card('A', DEFAULT_SUIT))  # Ace
     user.add_card(Card('J', DEFAULT_SUIT))  # 'J'

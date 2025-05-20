@@ -14,6 +14,9 @@ class Table:
 
     def add_observer(self, user):
         self.__observers.append(user)
+        
+    def all_players_have_bet(self):
+        return self.__game.get_bet() == self.__users
 
     def remove_user(self, user):
         if user in self.__users:
@@ -66,8 +69,12 @@ class Game:
         """Restituisce la lista degli utenti attivi."""
         return self.__active_users
     
+    def get_bet(self, user):
+        return self.__bets.get(user)
+
     def get_deck(self):
         return self.__deck
+    
     def add_dealer_card(self, card):
         """Aggiunge una carta alla mano del dealer."""
         if Hand.is_busted(self.__dealer_hand) or Hand.is_blackjack(self.__dealer_hand) or Hand.get_hand_value(self.__dealer_hand) >= self.DEALER_STAND_VALUE:
@@ -86,7 +93,9 @@ class Game:
     def determine_result(self):
         results: list[Result] = []
         for user in self.__active_users:
-            result = Result(user.get_username(), self._determine_difference(user), user.get_balance())
+            diff = self._determine_difference(user)
+            user.update_balance(diff)
+            result = Result(user.get_username(), diff, user.get_balance())
             results.append(result)
         return results
                 
@@ -103,20 +112,16 @@ class Game:
         return not Hand.is_busted(user.get_hand()) and \
             Hand.get_hand_value(self.__dealer_hand) < Hand.get_hand_value(user.get_hand()) or \
             Hand.is_blackjack(user.get_hand()) and not Hand.is_blackjack(self.__dealer_hand)
-            
-
-    def player_stand(self, user):
-        self.__finished_users.append(user)
 
     def player_double_down(self, user):
         self.place_bet(user, self.__bets[user] * 2)
         user.add_card(self.__deck.draw_card())
         self.remove_active_user(user)
-
     
     def remove_active_user(self, user):
         if user in self.__active_users:
             self.__active_users.remove(user)
+            self.__finished_users.append(user)
             
     def get_active_users(self):
         return self.__active_users
@@ -125,7 +130,7 @@ class Game:
         return self.__dealer_hand
 
     def all_players_done(self):
-        return len(self.__finished_users) == len(self.__active_users)
+        return len(self.__active_users) == 0
     
 class User:
     def __init__(self, username, balance):
@@ -154,6 +159,9 @@ class User:
 
     def __str__(self):
         return f"User: {self.__username}, Balance: {self.__balance}, Hand: {self.__cards}"
+    
+    def update_balance(self, amount):
+        self.__balance += amount
     
 class Deck:
     def __init__(self, num_decks=1):
