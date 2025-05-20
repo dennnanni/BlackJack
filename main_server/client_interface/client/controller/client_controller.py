@@ -1,7 +1,9 @@
 from client.constants import USER_INFO_API_ENDPOINT
+from client.controller.dispatcher import Dispatcher
 from client.controller.api_client import get_request
-from main_server.common.structures import Message
+from main_server.common.structures import Message, Server
 
+dispatcher = Dispatcher()
 
 def get_user_info(data):
     username = data.get('username')
@@ -16,7 +18,9 @@ def get_user_info(data):
     
 
 def get_game_server(data):
-    # load_balancer.get_server()
-    # response = post_request(routes['assign_user'], {'username': username, 'server_id': server})
-    return Message.success(redirect='http://localhost:4999').to_dict()
+    server, error = dispatcher.pick_game_server()
+    if error:
+        return error
+    
+    return Message.success(redirect=server.get_url()).to_dict()
     

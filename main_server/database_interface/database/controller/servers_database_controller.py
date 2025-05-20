@@ -1,4 +1,6 @@
+from dataclasses import asdict
 from http import HTTPStatus
+import json
 from common.structures import Message, Server
 from flask import Blueprint, jsonify
 
@@ -28,4 +30,4 @@ def get_active_servers_route():
         ),
     ]
     
-    return jsonify(Message.success(data=active_servers.to_dict()).to_dict()), HTTPStatus.OK
+    return jsonify(Message.success(data=[asdict(server) for server in active_servers]).to_dict()), HTTPStatus.OK

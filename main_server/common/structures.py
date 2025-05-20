@@ -71,6 +71,8 @@ class Server:
     connected_users: int
     max_users: int
 
+    def get_url(self):
+        return f'http://{self.ip}:{self.port}'
 
     def to_dict(self):
         return asdict(self)
