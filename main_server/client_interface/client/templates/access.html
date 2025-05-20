@@ -11,6 +11,20 @@
 <body class="bg-light">
 
 	<div class="container mt-5">
+		<!-- Banner di errore -->
+		{% if error %}
+		<div class="row justify-content-center mb-3">
+			<div class="col-md-6">
+				<div class="alert alert-danger alert-dismissible fade show rounded-3" role="alert">
+					<strong>Errore:</strong> {{ error }}
+					<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+				</div>
+			</div>
+		</div>
+		{% endif %}
+	</div>
+
+	<div class="container mt-5">
 		<div class="row justify-content-center">
 			<div class="col-md-6">
 				<div class="card shadow rounded-4">

@@ -26,12 +26,12 @@ def register():
 @client_bp.route('/login', methods=['POST'])
 def login_post():
     message = login_user(request.form.get('username'), request.form.get('password'))
-    return redirect(message['redirect']) if message['success'] else render_template('access.html', error=message['message'])
+    return redirect(message['redirect']) if message['success'] else render_template('access.html', login=True, error=message['message'])
 
 @client_bp.route('/register', methods=['POST'])
 def register_post():
     message = register_user(request.form.get('username'), request.form.get('password'))
-    return redirect(message['redirect']) if message['success'] else render_template('access.html', error=message['message'])
+    return redirect(message['redirect']) if message['success'] else render_template('access.html', register=True, error=message['message'])
 
 @client_bp.route('/logout', methods=['POST'])
 @login_required
