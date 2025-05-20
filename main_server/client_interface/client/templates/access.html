@@ -77,49 +77,6 @@
 		socket.on('connect', () => {
 			console.log('Connected to server');
 		});
-/*
-		document.getElementById('loginForm').addEventListener('submit', function (e) {
-			e.preventDefault();
-			const username = document.getElementById('loginUsername').value;
-			const password = document.getElementById('loginPassword').value;
-			console.log('Login:', username, password);
-
-			socket.emit('login', { username, password }, (response) => {
-				if (response.success) {
-					console.log('Login successful:', response);
-					window.location.href = response.redirect;
-				} else if (response.error === 'invalid_credentials') {
-					alert('Invalid username or password.');
-				} else {
-					alert('Login error: ' + response.message);
-				}
-			});
-
-		});
-
-		document.getElementById('registerForm').addEventListener('submit', function (e) {
-			e.preventDefault();
-			const username = document.getElementById('registerUsername').value;
-			const password = document.getElementById('registerPassword').value;
-			const confirmPassword = document.getElementById('registerConfirmPassword').value;
-
-			if (password !== confirmPassword) {
-				alert('Passwords don\'t match.');
-				return;
-			}
-
-			console.log('Registrazione:', username);
-
-
-			socket.emit('register', { username, password }, (response) => {
-				if (response.success) {
-					alert('Registration successful!');
-					window.location.href = response.redirect;
-				} else {
-					alert('Registration error: ' + response.message);
-				}
-			});
-		}); */
 	</script>
 </body>
 
