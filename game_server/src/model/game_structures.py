@@ -162,7 +162,6 @@ class User:
     
     def update_balance(self, amount):
         self.__balance += amount
-
     
 class Deck:
     def __init__(self, num_decks=1):
