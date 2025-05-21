@@ -70,6 +70,7 @@ class Server:
     port: int
     connected_users: int
     max_users: int
+    key: str
 
     def get_url(self):
         return f'http://{self.ip}:{self.port}'
@@ -84,7 +85,8 @@ class Server:
             ip=data["ip"],
             port=data["port"],
             connected_users=data["connected_users"],
-            max_users=data["max_users"]
+            max_users=data["max_users"],
+            key=data["key"] if "key" in data else None
         )
         
     @staticmethod
@@ -94,5 +96,6 @@ class Server:
             ip=data[1],
             port=data[2],
             connected_users=data[3],
-            max_users=data[4]
+            max_users=data[4],
+            key=data[5] if len(data) > 5 else None
         )

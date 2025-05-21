@@ -1,7 +1,11 @@
+import random
+import time
+import jwt
+from client import SHARED_SECRET, fernet_shared_secret
 from client.constants import USER_INFO_API_ENDPOINT
 from client.controller.dispatcher import Dispatcher
 from client.controller.api_client import get_request
-from main_server.common.structures import Message, Server
+from main_server.common.structures import Message
 
 dispatcher = Dispatcher()
 
@@ -22,5 +26,23 @@ def get_game_server(data):
     if error:
         return error
     
-    return Message.success(redirect=server.get_url()).to_dict()
+    if not server.key:
+        raise ValueError("Server key is not set")
+    
+    private_key = fernet_shared_secret.decrypt(server.key.encode()).decode()
+    
+    # token generation to be used for authentication to the game server
+    token = {
+        'username': data.get('username'),
+        'iat': int(time.time()),
+        'exp': int(time.time()) + 120,  # token valid for 2 minutes
+        'nonce': random.randint(0, 1000000),
+        'server_id': server.id,
+        'server_ip': server.ip,
+        'server_port': server.port,
+    }
+    
+    jwt_token = jwt.encode(token, private_key, algorithm='HS256')
+    
+    return Message.success(redirect=server.get_url(), data={'token': jwt_token}).to_dict()
     

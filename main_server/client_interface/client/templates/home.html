@@ -46,6 +46,21 @@
             });
         });
 
+        function postRedirect(url, token) {
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = url;
+
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'token';
+            input.value = token;
+            form.appendChild(input);
+
+            document.body.appendChild(form);
+            form.submit();
+        }
+
         document.getElementById('btnPlay').addEventListener('click', () => {
             console.log("Searching for table!");
 
@@ -53,8 +68,8 @@
                 username: '{{username}}'
             }, (response) => {
                 if (response.success) {
-                    alert("Found table! " + response.redirect);
-                    //window.location.replace(response.redirect);
+                    alert("Found table!");
+                    postRedirect(response.redirect, response.data.token);
                 } else {
                     console.error("Error finding table:", response.message);
                 }

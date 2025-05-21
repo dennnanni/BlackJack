@@ -60,12 +60,13 @@ def get_servers_with_user_count():
                 GameServer.ip,
                 GameServer.port,
                 func.count(User.username).label('connected_users'),
-                literal(10).label('max_users')
+                literal(10).label('max_users'),
+                GameServer.key
             ).outerjoin(
                 userservers, GameServer.id == userservers.c.idserver
             ).outerjoin(
                 User, userservers.c.username == User.username
-            ).group_by(GameServer.id, GameServer.ip, GameServer.port).all()
+            ).group_by(GameServer).all()
             
             return result
     except SQLAlchemyError as e:

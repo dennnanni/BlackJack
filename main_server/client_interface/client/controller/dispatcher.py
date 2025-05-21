@@ -1,4 +1,3 @@
-import json
 from client.constants import GAME_SERVERS_API_ENDPOINT
 from client.controller.api_client import get_request
 from common.structures import Message, Server

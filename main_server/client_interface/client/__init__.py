@@ -2,6 +2,16 @@ from client.model.structures import UserSession
 from flask import Flask, redirect
 from flask_socketio import SocketIO
 from flask_login import LoginManager
+from cryptography.fernet import Fernet
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
+
+SHARED_SECRET = os.getenv('SHARED_SECRET').encode()
+if not SHARED_SECRET:
+    raise ValueError("SHARED_SECRET environment variable not set")
+fernet_shared_secret = Fernet(SHARED_SECRET)
 
 socketio = SocketIO(cors_allowed_origins="*", manage_session=False)
 
