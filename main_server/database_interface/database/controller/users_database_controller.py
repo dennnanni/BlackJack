@@ -3,9 +3,9 @@ from flask import Blueprint, jsonify, request
 from database.model.database_actions import add_user, get_user
 from main_server.common.structures import UserDatabase, Message, UserInfo, UserLogin
 
-database_bp = Blueprint('database', __name__)
+users_routes_bp = Blueprint('users_db', __name__)
 
-@database_bp.route('/register', methods=['POST'])
+@users_routes_bp.route('/register', methods=['POST'])
 def register_user_route():
     data = request.get_json()
     user = UserDatabase(**data)
@@ -16,10 +16,9 @@ def register_user_route():
         print(f'Error adding user: {result}')
         return jsonify(Message.failure(f'Error adding user: {result}').to_dict()), HTTPStatus.BAD_REQUEST
 
-@database_bp.route('/get_salt', methods=['POST'])
+@users_routes_bp.route('/salt', methods=['GET'])
 def get_salt_route():
-    data = request.get_json()
-    username = data
+    username = request.args.get('username')
     if not username:
         return jsonify(Message.failure('Username is required').to_dict()), HTTPStatus.BAD_REQUEST
     
@@ -29,7 +28,7 @@ def get_salt_route():
     else:
         return jsonify(Message.failure('User not found').to_dict()), HTTPStatus.NOT_FOUND
     
-@database_bp.route('/login', methods=['POST'])
+@users_routes_bp.route('/login', methods=['POST'])
 def login_user_route():
     data = request.get_json()
     user = UserLogin(**data)
@@ -40,7 +39,7 @@ def login_user_route():
         print(f'Wrong password for user: {user.username}')
         return jsonify(Message.failure(f'Wrong password').to_dict()), HTTPStatus.BAD_REQUEST
     
-@database_bp.route('/get_user_info', methods=['GET'])
+@users_routes_bp.route('/info', methods=['GET'])
 def get_user_info_route():
     username = request.args.get('username')
     if not username:

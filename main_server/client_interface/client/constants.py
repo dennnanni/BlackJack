@@ -1,0 +1,15 @@
+# Prefix API
+USERS_PREFIX = '/users'
+SERVERS_PREFIX = '/servers'
+
+# Endpoint API completi
+LOGIN_API_ENDPOINT = f'{USERS_PREFIX}/login'
+REGISTER_API_ENDPOINT = f'{USERS_PREFIX}/register'
+USER_INFO_API_ENDPOINT = f'{USERS_PREFIX}/info'
+SALT_API_ENDPOINT = f'{USERS_PREFIX}/salt'
+GAME_SERVERS_API_ENDPOINT = f'{SERVERS_PREFIX}/load'
+
+# Path local route
+USER_HOME_PATH = '/user/'
+LOGIN_PAGE_PATH = '/login'
+REGISTER_PAGE_PATH = '/register'

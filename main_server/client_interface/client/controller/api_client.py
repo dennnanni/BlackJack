@@ -1,14 +1,6 @@
 from common.structures import Message, UserLogin
 import requests
 
-db_api_routes = {
-    'login': '/login',
-    'register': '/register',
-    'get_user_info': '/get_user_info',
-    'get_salt': '/get_salt',
-    'user_homepage': '/user/',
-}
-
 database_url = 'http://localhost:5001'
 
 def validate_user_login_input(data):

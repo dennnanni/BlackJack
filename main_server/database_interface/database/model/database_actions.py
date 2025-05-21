@@ -1,6 +1,7 @@
+from sqlalchemy import func, literal
 from sqlalchemy.exc import SQLAlchemyError
 from database import SessionLocal, engine
-from database.orm.orm import Base, User
+from database.orm.orm import Base, GameServer, User, userservers
 
 Base.metadata.create_all(bind=engine)
 
@@ -43,3 +44,30 @@ def get_user(username):
         print(f'Error retrieving user: {e}')
         return None
     
+    
+def get_servers_with_user_count():
+    """
+    Retrieves the list of servers with connected users count from the database.
+    
+    Returns:
+        list: A list of objects that include id, ip and port of the server, 
+        number of users connected to it and the maximum number of players accepted.
+    """
+    try:
+        with SessionLocal() as session:
+            result = session.query(
+                GameServer.id,
+                GameServer.ip,
+                GameServer.port,
+                func.count(User.username).label('connected_users'),
+                literal(10).label('max_users')
+            ).outerjoin(
+                userservers, GameServer.id == userservers.c.idserver
+            ).outerjoin(
+                User, userservers.c.username == User.username
+            ).group_by(GameServer.id, GameServer.ip, GameServer.port).all()
+            
+            return result
+    except SQLAlchemyError as e:
+        print(f'Error retrieving active servers: {e}')
+        return None

@@ -54,7 +54,7 @@
             }, (response) => {
                 if (response.success) {
                     alert("Found table! " + response.redirect);
-                    window.location.replace(response.redirect);
+                    //window.location.replace(response.redirect);
                 } else {
                     console.error("Error finding table:", response.message);
                 }
