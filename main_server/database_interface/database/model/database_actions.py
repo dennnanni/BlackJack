@@ -47,10 +47,11 @@ def get_user(username):
     
 def get_servers_with_user_count():
     """
-    Retrieves the list of active servers from the database.
+    Retrieves the list of servers with connected users count from the database.
     
     Returns:
-        list: A list of active server objects.
+        list: A list of objects that include id, ip and port of the server, 
+        number of users connected to it and the maximum number of players accepted.
     """
     try:
         with SessionLocal() as session:
