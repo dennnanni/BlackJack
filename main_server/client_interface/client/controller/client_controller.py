@@ -28,8 +28,6 @@ def get_game_server(data):
     if not username:
         return Message.failure('Username is required').to_dict()
     
-    logging.info('Requesting game server for user: %s', username)
-    
     user_status, error = get_request(PLAYING_API_ENDPOINT, {'username': username})
     if error:
         return error
