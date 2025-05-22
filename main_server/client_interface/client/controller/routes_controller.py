@@ -1,9 +1,7 @@
-import base64
-import hashlib
-import secrets
 from client.constants import LOGIN_API_ENDPOINT, LOGIN_PAGE_PATH, REGISTER_API_ENDPOINT, SALT_API_ENDPOINT, USER_HOME_PATH
 from client.controller.api_client import get_request, post_request
 from client.model.structures import UserSession
+from client.utils.security import generate_hashed_password, get_hashed_password
 from main_server.common.structures import UserLogin, UserDatabase, Message
 from flask_login import login_user as flask_login_user
 
@@ -53,14 +51,3 @@ def register_user(username, password):
     if message.success:
         return Message.success(redirect=f'{LOGIN_PAGE_PATH}').to_dict()
     return message.to_dict()
-
-def get_hashed_password(password, salt):
-    salt_bytes = base64.b64decode(salt) if isinstance(salt, str) else salt
-    hash_bytes = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt_bytes, 100_000)
-    return base64.b64encode(hash_bytes).decode('utf-8')
-
-def generate_hashed_password(password):
-    salt = secrets.token_bytes(16)  # 128-bit salt
-    salt_b64 = base64.b64encode(salt).decode('utf-8')
-    hashed_password = get_hashed_password(password, salt)
-    return hashed_password, salt_b64

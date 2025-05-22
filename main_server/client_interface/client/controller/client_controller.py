@@ -1,8 +1,4 @@
-import logging
-import time
-import uuid
-import jwt
-from client import fernet_shared_secret
+from client.utils.security import create_token
 from client.constants import PLAYING_API_ENDPOINT, USER_INFO_API_ENDPOINT
 from client.controller.dispatcher import Dispatcher
 from client.controller.api_client import get_request
@@ -42,20 +38,7 @@ def get_game_server(data):
     if not server.key:
         raise ValueError("Server key is not set")
     
-    private_key = fernet_shared_secret.decrypt(server.key.encode()).decode()
+    token = create_token(username, server)
     
-    # token generation to be used for authentication to the game server
-    token = {
-        'username': username,
-        'iat': int(time.time()),
-        'exp': int(time.time()) + 120,  # token valid for 2 minutes
-        'nonce': str(uuid.uuid4()),
-        'server_id': server.id,
-        'server_ip': server.ip,
-        'server_port': server.port,
-    }
-    
-    jwt_token = jwt.encode(token, private_key, algorithm='HS256')
-    
-    return Message.success(redirect=server.get_url(), data={'token': jwt_token}).to_dict()
+    return Message.success(redirect=server.get_url(), data={'token': token}).to_dict()
     
