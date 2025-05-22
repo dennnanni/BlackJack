@@ -1,8 +1,9 @@
-import random
+import logging
 import time
+import uuid
 import jwt
-from client import SHARED_SECRET, fernet_shared_secret
-from client.constants import USER_INFO_API_ENDPOINT
+from client import fernet_shared_secret
+from client.constants import PLAYING_API_ENDPOINT, USER_INFO_API_ENDPOINT
 from client.controller.dispatcher import Dispatcher
 from client.controller.api_client import get_request
 from main_server.common.structures import Message
@@ -22,6 +23,20 @@ def get_user_info(data):
     
 
 def get_game_server(data):
+    print('Requesting game server')
+    username = data.get('username')
+    if not username:
+        return Message.failure('Username is required').to_dict()
+    
+    logging.info('Requesting game server for user: %s', username)
+    
+    user_status, error = get_request(PLAYING_API_ENDPOINT, {'username': username})
+    if error:
+        return error
+    message = Message(**user_status)
+    if not message.success:
+        return message.to_dict()
+    
     server, error = dispatcher.pick_game_server()
     if error:
         return error
@@ -33,10 +48,10 @@ def get_game_server(data):
     
     # token generation to be used for authentication to the game server
     token = {
-        'username': data.get('username'),
+        'username': username,
         'iat': int(time.time()),
         'exp': int(time.time()) + 120,  # token valid for 2 minutes
-        'nonce': random.randint(0, 1000000),
+        'nonce': str(uuid.uuid4()),
         'server_id': server.id,
         'server_ip': server.ip,
         'server_port': server.port,
