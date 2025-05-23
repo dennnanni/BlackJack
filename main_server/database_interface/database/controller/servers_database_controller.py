@@ -1,7 +1,6 @@
-from dataclasses import asdict
-from http import HTTPStatus, server
-import json
-from common.structures import Message, RegisteredServer
+from http import HTTPStatus
+from common.response_fields import DATA, ERROR, SUCCESS
+from common.structures import RegisteredServer
 from database.model.database_actions import get_servers_with_user_count, register_server
 from database.orm.orm import GameServer
 from flask import Blueprint, jsonify, request
@@ -17,11 +16,11 @@ def get_active_servers_route():
     servers = get_servers_with_user_count()
     
     if servers is None:
-        return jsonify(Message.failure('Error retrieving active servers').to_dict()), HTTPStatus.INTERNAL_SERVER_ERROR
+        return jsonify({ERROR: 'Error in retrieving servers\'loads'}), HTTPStatus.INTERNAL_SERVER_ERROR
     
     servers = [RegisteredServer.from_tuple(server) for server in servers]
         
-    return jsonify(Message.success(data=[server.to_dict() for server in servers]).to_dict()), HTTPStatus.OK
+    return jsonify({DATA: [server.to_dict() for server in servers]}), HTTPStatus.OK
 
 @servers_routes_bp.route('/register', methods=['POST'])
 def register_server_route():
@@ -31,15 +30,15 @@ def register_server_route():
     data = request.get_json()
     
     if not data:
-        return jsonify(Message.failure('No data provided').to_dict()), HTTPStatus.BAD_REQUEST
+        return jsonify({ERROR: 'No data provided'}), HTTPStatus.BAD_REQUEST
     
     try:
         server = GameServer(**data)
     except Exception as e:
         print(f'Error parsing server data: {e}')
-        return jsonify(Message.failure(f'Invalid data: {e}').to_dict()), HTTPStatus.BAD_REQUEST
+        return jsonify({ERROR: f'Invalid data {data}'}), HTTPStatus.BAD_REQUEST
     
     if not register_server(server):
-        return jsonify(Message.failure('Error registering server').to_dict()), HTTPStatus.INTERNAL_SERVER_ERROR
+        return jsonify({ERROR: 'Failed to register the server'}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-    return jsonify(Message.success('Server registered successfully').to_dict()), HTTPStatus.OK
+    return jsonify({SUCCESS: True}), HTTPStatus.CREATED

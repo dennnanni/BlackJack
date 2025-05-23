@@ -1,41 +1,6 @@
-from common.structures import Message, UserDatabase
+from common.structures import UserDatabase
 
-def test_message_success():
-    """
-    Test the success method of the Message class.
-    """
-    message = Message.success('Test success message')
-    assert message.message == 'Test success message'
-    assert message.success is True
-    
-def test_message_failure():
-    """
-    Test the failure method of the Message class.
-    """
-    message = Message.failure('Test failure message')
-    assert message.message == 'Test failure message'
-    assert message.success is False
-    
-def test_data_message_success():
-    """
-    Test the success method of the Message class.
-    """
-    data = {'key': 'value'}
-    message = Message.success('Test success message', data=data)
-    assert message.message == 'Test success message'
-    assert message.success is True
-    assert message.data == data
-    assert message.redirect is None
-    
-def test_message_to_dict():
-    """
-    Test the to_dict method of the Message class.
-    """
-    message = Message.success('Test success message')
-    message_dict = message.to_dict()
-    assert message_dict['message'] == 'Test success message'
-    assert message_dict['success'] is True
-    
+
 def test_user_is_valid():
     """
     Test the is_valid method of the User class.

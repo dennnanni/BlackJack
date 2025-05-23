@@ -1,4 +1,4 @@
-from common.structures import Message
+from common.response_fields import ERROR
 import requests
 
 
@@ -22,16 +22,13 @@ def make_request(method, url, endpoint, *, params=None, json_data=None):
         try:
             response_data = response.json()
         except ValueError:
-            return None, Message.failure(f'Invalid JSON response from {endpoint}').to_dict()
+            return {ERROR: f'Invalid JSON response from {url}'}
 
-        if response.ok:
-            return response_data, None
-        else:
-            return None, response_data if isinstance(response_data, dict) else Message.failure(response.reason).to_dict()
+        return response_data
 
     except requests.RequestException as e:
         print(f'Request exception: {e}')
-        return None, Message.failure('Something went wrong while contacting the server').to_dict()
+        return {ERROR: f'Request exception in {method} action to {url}'}
 
     
 def get_request(url, endpoint, params=None):

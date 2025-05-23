@@ -45,25 +45,6 @@ class UserDatabase(UserInfo):
     def to_dict(self):
         return asdict(self)
 
-@dataclass(kw_only=True)
-class Message:
-    success: bool
-    message: str
-    data: Optional[dict] = None
-    redirect: Optional[str] = None
-
-    def to_dict(self):
-        return asdict(self)
-
-    @classmethod
-    def success(cls, message: str = '', data: dict = None, redirect: str = None):
-        return cls(success=True, message=message, data=data, redirect=redirect)
-
-    @classmethod
-    def failure(cls, message: str, redirect: str = None):
-        return cls(success=False, message=message, redirect=redirect)
-    
-
 @dataclass
 class Server:
     ip: str

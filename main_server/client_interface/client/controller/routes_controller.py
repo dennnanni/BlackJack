@@ -1,54 +1,55 @@
+import re
 from client.constants import LOGIN_API_ENDPOINT, LOGIN_PAGE_PATH, REGISTER_API_ENDPOINT, SALT_API_ENDPOINT, USER_HOME_PATH
 from client.model.structures import UserSession
 from client.utils.security import generate_hashed_password, get_hashed_password
 from common.http_requests import get_request, post_request
+from common.response_fields import ERROR, REDIRECT, SALT, SUCCESS
 from servers import DATABASE_URL
-from main_server.common.structures import UserLogin, UserDatabase, Message
+from main_server.common.structures import UserLogin, UserDatabase
 from flask_login import login_user as flask_login_user
 
 
 def login_user(username, password):
     print(f'Login attempt with username: {username} and password: {password}')
     if not username or not password:
-        return Message.failure('Username and password are required').to_dict()
+        return {ERROR: 'Username and password are required'}
 
-    salt_response, error = get_request(DATABASE_URL, SALT_API_ENDPOINT, {'username': username})
-    if error:
-        return error
+    salt_response = get_request(DATABASE_URL, SALT_API_ENDPOINT, {'username': username})
+    if salt_response.get(ERROR):
+        return salt_response
     
-    message = Message(**salt_response)
-    salt = message.data.get('salt')
+    salt = salt_response.get(SALT)
     
     if not salt:
-        print('No salt found in response')
-        return salt_response  # Could contain error message from server
+        return {ERROR: f'Salt not found for user {username}'}
 
     hashed_password = get_hashed_password(password, salt)
     login_data = UserLogin(username=username, password=hashed_password).to_dict()
 
-    login_response, error = post_request(DATABASE_URL, LOGIN_API_ENDPOINT, login_data)
-    if error:
-        return error
+    login_response = post_request(DATABASE_URL, LOGIN_API_ENDPOINT, login_data)
+    if login_response.get(ERROR):
+        return login_response
 
-    message = Message(**login_response)
-    if message.success:
+    if login_response.get(SUCCESS):
         user = UserSession(username)
         flask_login_user(user)
-        return Message.success(redirect=f'{USER_HOME_PATH}{username}').to_dict()
-    return message.to_dict()
+        return {REDIRECT: f'{USER_HOME_PATH}{username}'}
+    
+    return {ERROR: 'Login failed'}
+    
 
 def register_user(username, password):
     if not username or not password:
-        return Message.failure('Username and password are required').to_dict()
+        return {ERROR: 'Username and password are required'}
     
     hashed_password, salt = generate_hashed_password(password)
     user_db = UserDatabase(username=username, password=hashed_password, salt=salt, balance=0.0)
 
-    register_response, error = get_request(DATABASE_URL, REGISTER_API_ENDPOINT, user_db.to_dict())
-    if error:
-        return error
+    register_response = post_request(DATABASE_URL, REGISTER_API_ENDPOINT, user_db.to_dict())
+    if register_response.get(ERROR):
+        return register_response
 
-    message = Message(**register_response)
-    if message.success:
-        return Message.success(redirect=f'{LOGIN_PAGE_PATH}').to_dict()
-    return message.to_dict()
+    if register_response.get(SUCCESS):
+        return {REDIRECT: f'{LOGIN_PAGE_PATH}'}
+    
+    return {ERROR: 'Registration failed'}

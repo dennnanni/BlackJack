@@ -1,6 +1,7 @@
 from client.constants import GAME_SERVERS_API_ENDPOINT
 from common.http_requests import get_request
-from common.structures import Message, RegisteredServer
+from common.response_fields import DATA, ERROR
+from common.structures import RegisteredServer
 from servers import DATABASE_URL
 
 
@@ -13,18 +14,17 @@ class Dispatcher:
         return min(servers_list, key=lambda server: server.connected_users) if servers_list else None
         
     def pick_game_server(self):
-        response, error = get_request(DATABASE_URL, GAME_SERVERS_API_ENDPOINT)
-        if error:
-            return None, error
+        response = get_request(DATABASE_URL, GAME_SERVERS_API_ENDPOINT)
+        if response.get(ERROR):
+            return None, response.get(ERROR)
         
-        message = Message(**response)
-        if not message.success:
-            return None, message.to_dict()
+        servers = response.get(DATA)
+        if not servers:
+            return None, 'No servers available'
         
-        servers = message.data  # Already a list of dicts
         received_servers = [RegisteredServer.from_dict(server) for server in servers]
         
         picked = self.__pick_server(received_servers)
         if not picked:
-            return None, Message.failure('Servers are full').to_dict()
+            return None, 'Servers are full'
         return picked, None

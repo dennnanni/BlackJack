@@ -1,4 +1,5 @@
 from client.controller.routes_controller import login_user, register_user
+from common.response_fields import ERROR, REDIRECT
 from flask import Blueprint, redirect, render_template, request, session
 from flask_login import current_user, login_required
 
@@ -25,13 +26,13 @@ def register():
 
 @client_bp.route('/login', methods=['POST'])
 def login_post():
-    message = login_user(request.form.get('username'), request.form.get('password'))
-    return redirect(message['redirect']) if message['success'] else render_template('access.html', login=True, error=message['message'])
+    response = login_user(request.form.get('username'), request.form.get('password'))
+    return redirect(response.get(REDIRECT)) if response.get(REDIRECT) else render_template('access.html', login=True, error=response.get(ERROR))
 
 @client_bp.route('/register', methods=['POST'])
 def register_post():
-    message = register_user(request.form.get('username'), request.form.get('password'))
-    return redirect(message['redirect']) if message['success'] else render_template('access.html', register=True, error=message['message'])
+    response = register_user(request.form.get('username'), request.form.get('password'))
+    return redirect(response.get(REDIRECT)) if response.get(REDIRECT) else render_template('access.html', login=True, error=response.get(ERROR))
 
 @client_bp.route('/logout', methods=['POST'])
 @login_required

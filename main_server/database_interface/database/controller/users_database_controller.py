@@ -1,7 +1,8 @@
 from http import HTTPStatus
+from common.response_fields import DATA, ERROR, SALT, SUCCESS, PLAYING
 from flask import Blueprint, jsonify, request
 from database.model.database_actions import add_user, get_user, is_user_playing
-from main_server.common.structures import UserDatabase, Message, UserInfo, UserLogin
+from main_server.common.structures import UserDatabase, UserInfo, UserLogin
 
 users_routes_bp = Blueprint('users_db', __name__)
 
@@ -11,54 +12,52 @@ def register_user_route():
     user = UserDatabase(**data)
     result = add_user(user.username, user.password, user.salt, user.balance)
     if result is True:
-        return jsonify(Message.success('User added successfully').to_dict()), HTTPStatus.CREATED
+        return jsonify({SUCCESS: True}), HTTPStatus.CREATED
     else:
         print(f'Error adding user: {result}')
-        return jsonify(Message.failure(f'Error adding user: {result}').to_dict()), HTTPStatus.BAD_REQUEST
+        return jsonify({ERROR: f'Error adding user {user.username}'}), HTTPStatus.BAD_REQUEST
 
 @users_routes_bp.route('/salt', methods=['GET'])
 def get_salt_route():
     username = request.args.get('username')
     if not username:
-        return jsonify(Message.failure('Username is required').to_dict()), HTTPStatus.BAD_REQUEST
+        return jsonify({ERROR: 'Username is required to get salt'}), HTTPStatus.BAD_REQUEST
     
     user = get_user(username)
     if user:
-        return jsonify(Message.success(data={'salt': user.salt})), HTTPStatus.OK
+        return jsonify({SALT: user.salt}), HTTPStatus.OK
     else:
-        return jsonify(Message.failure('User not found').to_dict()), HTTPStatus.NOT_FOUND
+        return jsonify({ERROR: f'User {username} not found'}), HTTPStatus.NOT_FOUND
     
 @users_routes_bp.route('/login', methods=['POST'])
 def login_user_route():
     data = request.get_json()
     user = UserLogin(**data)
     user_db = get_user(user.username)
+    # TODO check if user is in db
     if user.password == user_db.password:
-        return jsonify(Message.success('User logged in successfully').to_dict()), HTTPStatus.OK
+        return jsonify({SUCCESS: True}), HTTPStatus.OK
     else:
         print(f'Wrong password for user: {user.username}')
-        return jsonify(Message.failure(f'Wrong password').to_dict()), HTTPStatus.BAD_REQUEST
+        return jsonify({ERROR: f'Wrong password for user {user.username}'}), HTTPStatus.BAD_REQUEST
     
 @users_routes_bp.route('/info', methods=['GET'])
 def get_user_info_route():
     username = request.args.get('username')
     if not username:
-        return jsonify(Message.failure('Username is required').to_dict()), HTTPStatus.BAD_REQUEST
+        return jsonify({ERROR: 'Username is required to get info'}), HTTPStatus.BAD_REQUEST
     
     user = get_user(username)
     if user:
-        return jsonify(Message.success(data=UserInfo(user.username, user.balance).to_dict()).to_dict()), HTTPStatus.OK
+        return jsonify({DATA: UserInfo(user.username, user.balance).to_dict()}), HTTPStatus.OK
     else:
-        return jsonify(Message.failure('User not found').to_dict()), HTTPStatus.NOT_FOUND
+        return jsonify({ERROR: f'User {user.username} not found'}), HTTPStatus.NOT_FOUND
     
 @users_routes_bp.route('/playing', methods=['GET'])
 def user_playing_route():
     username = request.args.get('username')
     if not username:
-        return jsonify(Message.failure('Username is required').to_dict()), HTTPStatus.BAD_REQUEST
+        return jsonify({ERROR: 'Username is required to get player status'}), HTTPStatus.BAD_REQUEST
     
     playing = is_user_playing(username)
-    if playing:
-        return jsonify(Message.failure('User is already playing').to_dict()), HTTPStatus.OK
-    else:
-        return jsonify(Message.success()), HTTPStatus.OK
+    return jsonify({PLAYING: playing}), HTTPStatus.OK

@@ -1,7 +1,8 @@
 import json
 import os
 from urllib import response
-from common.structures import Message, Server
+from common.response_fields import ENCRYPTED, ERROR
+from common.structures import Server
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 import requests
@@ -24,10 +25,10 @@ def test_registration():
     
     response = requests.post("http://localhost:5002/register", data=encrypted_data)
     
-    message = Message(**response.json())
-    assert message.success, message.message
-    assert message.data is not None, "No data in response"
-    data = fernet.decrypt(message.data.encode()).decode()
+    content = response.json()
+    
+    assert content.get(ENCRYPTED) is not None, content.get(ERROR)
+    data = fernet.decrypt(content.get(ENCRYPTED).encode()).decode()
     data = json.loads(data)
     assert test_data == data
     
