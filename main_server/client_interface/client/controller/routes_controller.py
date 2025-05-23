@@ -1,7 +1,8 @@
 from client.constants import LOGIN_API_ENDPOINT, LOGIN_PAGE_PATH, REGISTER_API_ENDPOINT, SALT_API_ENDPOINT, USER_HOME_PATH
-from client.controller.api_client import get_request, post_request
 from client.model.structures import UserSession
 from client.utils.security import generate_hashed_password, get_hashed_password
+from common.http_requests import get_request, post_request
+from servers import DATABASE_URL
 from main_server.common.structures import UserLogin, UserDatabase, Message
 from flask_login import login_user as flask_login_user
 
@@ -11,7 +12,7 @@ def login_user(username, password):
     if not username or not password:
         return Message.failure('Username and password are required').to_dict()
 
-    salt_response, error = get_request(SALT_API_ENDPOINT, {'username': username})
+    salt_response, error = get_request(DATABASE_URL, SALT_API_ENDPOINT, {'username': username})
     if error:
         return error
     
@@ -25,7 +26,7 @@ def login_user(username, password):
     hashed_password = get_hashed_password(password, salt)
     login_data = UserLogin(username=username, password=hashed_password).to_dict()
 
-    login_response, error = post_request(LOGIN_API_ENDPOINT, login_data)
+    login_response, error = post_request(DATABASE_URL, LOGIN_API_ENDPOINT, login_data)
     if error:
         return error
 
@@ -43,7 +44,7 @@ def register_user(username, password):
     hashed_password, salt = generate_hashed_password(password)
     user_db = UserDatabase(username=username, password=hashed_password, salt=salt, balance=0.0)
 
-    register_response, error = post_request(REGISTER_API_ENDPOINT, user_db.to_dict())
+    register_response, error = get_request(DATABASE_URL, REGISTER_API_ENDPOINT, user_db.to_dict())
     if error:
         return error
 

@@ -1,7 +1,8 @@
 from client.utils.security import create_token
 from client.constants import PLAYING_API_ENDPOINT, USER_INFO_API_ENDPOINT
 from client.controller.dispatcher import Dispatcher
-from client.controller.api_client import get_request
+from common.http_requests import get_request
+from servers import DATABASE_URL
 from main_server.common.structures import Message
 
 dispatcher = Dispatcher()
@@ -11,7 +12,7 @@ def get_user_info(data):
     if not username:
         return Message.failure('Username is required').to_dict()
 
-    user_info_response, error = get_request(USER_INFO_API_ENDPOINT, {'username': username})
+    user_info_response, error = get_request(DATABASE_URL, USER_INFO_API_ENDPOINT, {'username': username})
     if error:
         return error
     
@@ -24,7 +25,7 @@ def get_game_server(data):
     if not username:
         return Message.failure('Username is required').to_dict()
     
-    user_status, error = get_request(PLAYING_API_ENDPOINT, {'username': username})
+    user_status, error = get_request(DATABASE_URL, PLAYING_API_ENDPOINT, {'username': username})
     if error:
         return error
     message = Message(**user_status)

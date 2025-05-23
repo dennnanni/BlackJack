@@ -1,18 +1,8 @@
-from common.structures import Message, UserLogin
+from common.structures import Message
 import requests
 
-database_url = 'http://localhost:5001'
 
-def validate_user_login_input(data):
-    try:
-        user = UserLogin(**data)
-        if not user.is_valid:
-            return None, Message.failure('Wrong or missing data').to_dict()
-        return user, None
-    except TypeError as e:
-        return None, Message.failure(f'Wrong or missing data: {e}').to_dict()
-    
-def make_request(method, endpoint, *, params=None, json_data=None):
+def make_request(method, url, endpoint, *, params=None, json_data=None):
     """
     Performs a HTTP request to the database server.
 
@@ -25,9 +15,9 @@ def make_request(method, endpoint, *, params=None, json_data=None):
     Returns:
         tuple: (response JSON as dict, error as dict if present)
     """
-    url = f'{database_url}/{endpoint}'
+    url = f'{url}/{endpoint}'
     try:
-        response = requests.request(method, url, params=params, json=json_data)
+        response = requests.request(method, url, params=params, json=json_data, timeout=5)
 
         try:
             response_data = response.json()
@@ -44,7 +34,7 @@ def make_request(method, endpoint, *, params=None, json_data=None):
         return None, Message.failure('Something went wrong while contacting the server').to_dict()
 
     
-def get_request(endpoint, params=None):
+def get_request(url, endpoint, params=None):
     """
     Performs a GET request to the database server.
 
@@ -55,10 +45,10 @@ def get_request(endpoint, params=None):
     Returns:
         tuple: (JSON response as dict, error as dict if present)
     """
-    return make_request('GET', endpoint, params=params)
+    return make_request('GET', url, endpoint, params=params)
 
 
-def post_request(endpoint, json_data):
+def post_request(url, endpoint, json_data):
     """
     Performs a POST request to the database server.
 
@@ -69,4 +59,4 @@ def post_request(endpoint, json_data):
     Returns:
         tuple: (JSON response as dict, error as dict if present)
     """
-    return make_request('POST', endpoint, json_data=json_data)
+    return make_request('POST', url, endpoint, json_data=json_data)

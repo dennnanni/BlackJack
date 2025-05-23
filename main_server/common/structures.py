@@ -63,13 +63,12 @@ class Message:
     def failure(cls, message: str, redirect: str = None):
         return cls(success=False, message=message, redirect=redirect)
     
+
 @dataclass
 class Server:
     id: str
     ip: str
     port: int
-    connected_users: int
-    max_users: int
     key: str
 
     def get_url(self):
@@ -84,6 +83,20 @@ class Server:
             id=data["id"],
             ip=data["ip"],
             port=data["port"],
+            key=data["key"]
+        )    
+
+@dataclass
+class RegisteredServer(Server):
+    connected_users: int
+    max_users: int
+    
+    @staticmethod
+    def from_dict(data):
+        return RegisteredServer(
+            id=data["id"],
+            ip=data["ip"],
+            port=data["port"],
             connected_users=data["connected_users"],
             max_users=data["max_users"],
             key=data["key"] if "key" in data else None
@@ -91,7 +104,7 @@ class Server:
         
     @staticmethod
     def from_tuple(data):
-        return Server(
+        return RegisteredServer(
             id=data[0],
             ip=data[1],
             port=data[2],
