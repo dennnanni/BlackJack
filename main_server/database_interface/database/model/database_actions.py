@@ -90,3 +90,23 @@ def is_user_playing(username):
     except SQLAlchemyError as e:
         print(f'Error checking if user is playing: {e}')
         return False
+    
+def register_server(server):
+    """
+    Registers a new server in the database.
+    
+    Args:
+        server (GameServer): The server object to be registered.
+    
+    Returns:
+        bool: True if the server was registered successfully, False otherwise.
+    """
+    try:
+        with SessionLocal() as session:
+            session.add(server)
+            session.commit()
+        return True
+    except SQLAlchemyError as e:
+        print(f'Error registering server: {e}')
+        session.rollback()
+        return False

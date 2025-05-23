@@ -66,7 +66,6 @@ class Message:
 
 @dataclass
 class Server:
-    id: str
     ip: str
     port: int
     key: str
@@ -80,7 +79,6 @@ class Server:
     @staticmethod
     def from_dict(data):
         return Server(
-            id=data["id"],
             ip=data["ip"],
             port=data["port"],
             key=data["key"]
@@ -88,6 +86,7 @@ class Server:
 
 @dataclass
 class RegisteredServer(Server):
+    id: int
     connected_users: int
     max_users: int
     

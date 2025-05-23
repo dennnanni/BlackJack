@@ -1,5 +1,17 @@
+import os
+from cryptography.fernet import Fernet
+from dotenv import load_dotenv
 from flask import Flask
 from flask_socketio import SocketIO
+
+load_dotenv()
+
+SHARED_SECRET = os.getenv('SHARED_SECRET').encode()
+if not SHARED_SECRET:
+    raise ValueError("SHARED_SECRET environment variable not set")
+fernet_shared_secret = Fernet(SHARED_SECRET)
+
+DATABASE_URL = "http://localhost:5001"
 
 socketio = SocketIO(cors_allowed_origins="*")
 
