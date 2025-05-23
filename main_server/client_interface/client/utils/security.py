@@ -2,7 +2,6 @@ import base64
 import hashlib
 import secrets
 import time
-import uuid
 from client import fernet_shared_secret
 import jwt
 
@@ -14,7 +13,6 @@ def create_token(username, server):
         'username': username,
         'iat': int(time.time()),
         'exp': int(time.time()) + 120,  # token valid for 2 minutes
-        'nonce': str(uuid.uuid4()),
         'server_id': server.id,
         'server_ip': server.ip,
         'server_port': server.port,
