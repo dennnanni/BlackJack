@@ -6,7 +6,7 @@ def test_game_betting_and_result():
     game = Game([user], deck)
 
     game.place_bet(user, 20)
-    assert game.get_bet(user) == 20
+    assert game.get_userbet(user) == 20
 
     user.add_card(Card("10", "Spades"))
     user.add_card(Card("9", "Clubs"))

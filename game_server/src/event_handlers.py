@@ -1,6 +1,8 @@
-from flask_socketio import emit, on, join_room
+from flask_socketio import emit, join_room
+from flask_socketio import SocketIO
 from src.model.game_structures import User, TableManager, Hand
 from src.game_loop import GameLoop
+from src import central_client
 
 table_manager = TableManager()
 user_map = {}
@@ -14,19 +16,21 @@ def register_event_handlers(socketio):
         balance = data["balance"]
         user = User(username, balance)
         user_map[username] = user
-        table, is_player = table_manager.assign_user_to_table(user)#voglio far diventare isPlayer true se può entrare nel server, false altrimenti
+        table = table_manager.assign_user_to_table(user)
         
         room_id = f"table-{table.get_table_id()}"
         join_room(room_id)
         
-        emit("joined", {"table_id": table.get_table_id(), "is_player": is_player}, to=room_id)
         if table.is_ready_to_start():
             table_id = table.get_table_id()
             existing_loop = table_game_map.get(table_id)
-            if not existing_loop or not existing_loop.is_alive():    
+            if not existing_loop or not existing_loop.running:    
                 game_loop = GameLoop(table)
                 table_game_map[table_id] = game_loop
                 game_loop.start()
+            emit("joined", {"table_id": table.get_table_id(), "is_player": True}, to=room_id)
+        else:
+            emit("joined", {"table_id": table.get_table_id(), "is_player": False}, to=room_id)
                 
         if table.get_game():
             emit("initial_cards", {
@@ -35,8 +39,10 @@ def register_event_handlers(socketio):
                     u.get_username(): [str(c) for c in u.get_hand()]
                     for u in table.get_users()
                 },
-                'cards': [str(c) for c in table.get_game().get_dealer_hand()]
+                'dealer_cards': [str(c) for c in table.get_game().get_dealer_hand()]
             }, to=room_id)
+            
+        central_client.update_user_list(user_map.keys())
 
     @socketio.on("bet")
     def handle_bet(data):
