@@ -72,3 +72,21 @@ def get_servers_with_user_count():
     except SQLAlchemyError as e:
         print(f'Error retrieving active servers: {e}')
         return None
+    
+def is_user_playing(username):
+    """
+    Checks if a user is playing on any server.
+    
+    Args:
+        username (str): The username of the user.
+    
+    Returns:
+        bool: True if the user is related to some server, False otherwise.
+    """
+    try:
+        with SessionLocal() as session:
+            result = session.query(userservers).filter(userservers.c.username == username).first()
+            return result is not None
+    except SQLAlchemyError as e:
+        print(f'Error checking if user is playing: {e}')
+        return False

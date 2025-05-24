@@ -1,6 +1,6 @@
 from http import HTTPStatus
 from flask import Blueprint, jsonify, request
-from database.model.database_actions import add_user, get_user
+from database.model.database_actions import add_user, get_user, is_user_playing
 from main_server.common.structures import UserDatabase, Message, UserInfo, UserLogin
 
 users_routes_bp = Blueprint('users_db', __name__)
@@ -50,3 +50,15 @@ def get_user_info_route():
         return jsonify(Message.success(data=UserInfo(user.username, user.balance).to_dict()).to_dict()), HTTPStatus.OK
     else:
         return jsonify(Message.failure('User not found').to_dict()), HTTPStatus.NOT_FOUND
+    
+@users_routes_bp.route('/playing', methods=['GET'])
+def user_playing_route():
+    username = request.args.get('username')
+    if not username:
+        return jsonify(Message.failure('Username is required').to_dict()), HTTPStatus.BAD_REQUEST
+    
+    playing = is_user_playing(username)
+    if playing:
+        return jsonify(Message.failure('User is already playing').to_dict()), HTTPStatus.OK
+    else:
+        return jsonify(Message.success()), HTTPStatus.OK
