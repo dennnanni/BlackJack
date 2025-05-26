@@ -1,4 +1,3 @@
-from email.policy import HTTP
 from http import HTTPStatus
 import json
 from common.http_requests import post_request

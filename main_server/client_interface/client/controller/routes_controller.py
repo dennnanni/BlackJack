@@ -1,4 +1,3 @@
-import re
 from client.constants import LOGIN_API_ENDPOINT, LOGIN_PAGE_PATH, REGISTER_API_ENDPOINT, SALT_API_ENDPOINT, USER_HOME_PATH
 from client.model.structures import UserSession
 from client.utils.security import generate_hashed_password, get_hashed_password

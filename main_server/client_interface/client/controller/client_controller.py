@@ -1,10 +1,8 @@
-from tkinter import E
 from client.utils.security import create_token
 from client.constants import PLAYING_API_ENDPOINT, USER_INFO_API_ENDPOINT
 from client.controller.dispatcher import Dispatcher
 from common.http_requests import get_request
 from common.response_fields import ERROR, REDIRECT, TOKEN
-from common.structures import RegisteredServer
 from servers import DATABASE_URL
 
 dispatcher = Dispatcher()
