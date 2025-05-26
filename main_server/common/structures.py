@@ -1,6 +1,5 @@
 from dataclasses import asdict, dataclass
 
-
 @dataclass
 class BaseUser:
     username: str
