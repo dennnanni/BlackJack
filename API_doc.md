@@ -116,3 +116,25 @@ Must come after the salt request.
 - `400 BAD REQUEST` or `500 INTERNAL SERVER ERROR`
 ---
 
+## Server interface
+
+> **POST** `/register`
+
+#### INPUT FIELDS
+
+An ecrypted string containing `Server` object as JSON. The encryption should be done with the shared key.
+
+| Field name | Type | Description |
+| ----------- | ----------- | ----------- |
+| ip | string | |
+| port | integer | the port the server wants connection on | 
+| key | string | key chosen by the server to communicate with central |
+
+#### OUTPUT
+
+- `201 CREATED` 
+    | Field name | Type | Description |
+    | ----------- | ----------- | ----------- |
+    | encrypted | string | returns the input data encrypted with the transmitted key for validation |
+
+- `400 BAD REQUEST`
