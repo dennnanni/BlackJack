@@ -69,8 +69,11 @@ class Game:
         """Restituisce la lista degli utenti attivi."""
         return self.__active_users
     
-    def get_bet(self, user):
+    def get_userbet(self, user):
         return self.__bets.get(user)
+    
+    def get_bet(self):
+        return self.__bets
 
     def get_deck(self):
         return self.__deck
@@ -220,6 +223,13 @@ class Result:
         self.username = username
         self.balanceDifference = balanceDifference
         self.newBalance = newBalance
+    
+    def to_dict(self):
+        return {
+            "username": self.username,
+            "balance_change": self.balanceDifference,
+            "new_balance": self.newBalance
+        }
         
 class Hand:
     BLACKJACK = 21
@@ -259,20 +269,20 @@ class TableManager:
             if table.table_is_not_full() and not table.is_game_active():
                 table.add_user(user)
                 self.__user_table_map[user.get_username()] = table
-                return table, True
+                return table
 
         
         for table in self.__tables:
-            if table.is_game_active() and not table.has_user(user.get_username()):
+            if table.is_game_active():
                 table.add_observer(user)
                 self.__user_table_map[user.get_username()] = table
-                return table, True 
+                return table 
 
         new_table = Table(f"table_{len(self.__tables)+1}")
         new_table.add_user(user)
         self.__tables.append(new_table)
         self.__user_table_map[user.get_username()] = new_table
-        return new_table, True
+        return new_table
 
     def get_user_table(self, username):
         return self.__user_table_map.get(username)

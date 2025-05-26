@@ -2,6 +2,7 @@ import time
 from threading import Thread, Event
 from src.model.game_structures import Deck, Game, Hand, User
 from src import socketio
+from src import central_client
 
 class GameLoop(Thread):
     def __init__(self, table):
@@ -23,7 +24,7 @@ class GameLoop(Thread):
             socketio.emit('place_bets', {'table': self.table.get_table_id()}, to=self.room_id)
             self.bets_done_event.wait(timeout=35)
             for user in self.table.get_users():
-                if not game.get_bet(user):
+                if not game.get_userbet(user):
                     # Nessuna puntata -> escludi
                     game.remove_active_user(user)
                     
@@ -69,15 +70,13 @@ class GameLoop(Thread):
             # Fase 6: risultati e bilanci
             results = game.determine_result()
             socketio.emit('round_results', {
-                'results': [r.__dict__ for r in results]
+                'results': [vars(r) for r in results]
             }, to=self.room_id)
-
-            # Aggiorna l via server centrale (chiamata REST simulata)
-            from src.utils import update_user_balance
-            for r in results:
-                update_user_balance(r.username, r.balanceDifference)
-
+            
+            central_client.send_results(results)
             self.table.clear_game()
+            self.bets_done_event.clear()
+            self.actions_done_event.clear()
         
         self.running = False
 
