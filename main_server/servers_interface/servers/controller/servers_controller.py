@@ -39,4 +39,4 @@ def index():
     encrypted_data = fernet_private.encrypt(cleartext.encode()).decode()
     
     # success message contains data sent from the server encrypted with its key for validity
-    return jsonify({ENCRYPTED: encrypted_data}), HTTPStatus.OK
+    return jsonify({ENCRYPTED: encrypted_data}), HTTPStatus.CREATED
