@@ -131,7 +131,7 @@ def get_server_key(server_id):
         print(f'Error retrieving server key: {e}')
         return None
     
-def update_user_balances(results):
+def update_users_balance(results):
     """
     Updates the balances of users based on the results.
     
