@@ -110,3 +110,49 @@ def register_server(server):
         print(f'Error registering server: {e}')
         session.rollback()
         return False
+    
+def get_server_key(server_id):
+    """
+    Retrieves the key of a server by its ID.
+    
+    Args:
+        server_id (int): The ID of the server.
+    
+    Returns:
+        str: The key of the server if found, None otherwise.
+    """
+    try:
+        with SessionLocal() as session:
+            server = session.query(GameServer).filter(GameServer.id == server_id).first()
+            if server:
+                return server.key
+            return None
+    except SQLAlchemyError as e:
+        print(f'Error retrieving server key: {e}')
+        return None
+    
+def update_user_balances(results):
+    """
+    Updates the balances of users based on the results.
+    
+    Args:
+        results (list): A list of Result objects containing username and balanceDifference.
+    """
+    try:
+        with SessionLocal() as session:
+            for result in results:
+                user = session.query(User).filter(User.username == result.username).first()
+                if user:
+                    if user.balance + result.balanceDifference != result.newBalance:
+                        raise ValueError(f'Balance mismatch for user {result.username}: expected {result.newBalance}, got {user.balance + result.balanceDifference}')
+                    user.balance += result.balanceDifference
+            session.commit()
+            return True
+    except SQLAlchemyError as e:
+        print(f'Error updating user balances: {e}')
+        session.rollback()
+        return False
+    except Exception as e:
+        print(f'Unexpected error updating user balances: {e}')
+        session.rollback()
+        return str(e)
