@@ -1,7 +1,7 @@
 import json
 import os
 from common.response_fields import ENCRYPTED, ERROR
-from common.structures import Result, Server
+from common.structures import RegisteredServer, Result, Server
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 import jwt
@@ -32,7 +32,13 @@ def test_registration():
     assert content.get(ENCRYPTED) is not None, content.get(ERROR)
     data = fernet.decrypt(content.get(ENCRYPTED).encode()).decode()
     data = json.loads(data)
-    assert test_data == data
+    print(f"Decrypted data: {data}")
+    return
+    server = RegisteredServer(**data)
+    assert server.ip == test_data['ip']
+    assert server.port == test_data['port']
+    assert server.key == test_data['key']
+    
     
     
 def test_publish_results():

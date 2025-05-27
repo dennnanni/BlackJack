@@ -105,7 +105,8 @@ def register_server(server):
         with SessionLocal() as session:
             session.add(server)
             session.commit()
-        return True
+            session.refresh(server)
+        return server.id
     except SQLAlchemyError as e:
         print(f'Error registering server: {e}')
         session.rollback()

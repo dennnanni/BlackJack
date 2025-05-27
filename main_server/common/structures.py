@@ -1,4 +1,5 @@
 from dataclasses import asdict, dataclass
+from turtle import st
 
 @dataclass
 class BaseUser:
@@ -60,16 +61,28 @@ class Server:
             port=data["port"],
             key=data["key"]
         )    
-
+        
 @dataclass
 class RegisteredServer(Server):
     id: int
+    
+    @staticmethod
+    def from_dict(data):
+        return RegisteredServer(
+            id=data["id"],
+            ip=data["ip"],
+            port=data["port"],
+            key=data["key"]
+        )
+
+@dataclass
+class ServerLoad(RegisteredServer):
     connected_users: int
     max_users: int
     
     @staticmethod
     def from_dict(data):
-        return RegisteredServer(
+        return ServerLoad(
             id=data["id"],
             ip=data["ip"],
             port=data["port"],
@@ -80,7 +93,7 @@ class RegisteredServer(Server):
         
     @staticmethod
     def from_tuple(data):
-        return RegisteredServer(
+        return ServerLoad(
             id=data[0],
             ip=data[1],
             port=data[2],

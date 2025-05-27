@@ -1,8 +1,9 @@
 from http import HTTPStatus
 import json
+from xml.dom.domreg import registered
 from common.http_requests import get_request, post_request
-from common.response_fields import ENCRYPTED, ERROR, SUCCESS, TOKEN
-from common.structures import Server
+from common.response_fields import ENCRYPTED, ERROR, SERVER_ID, SUCCESS, TOKEN
+from common.structures import RegisteredServer, Server
 from flask import Blueprint, jsonify, request
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
@@ -35,8 +36,13 @@ def index():
     
     # register the server in the database
     result = post_request(DATABASE_URL, REGISTER_NEW_SERVER_API_ENDPOINT, server.to_dict())
+    print(f'Result of server registration: {result}')
     if result.get(ERROR):
         return result
+    
+    registered_server = RegisteredServer(server.ip, server.port, server.key, result.get(SERVER_ID))
+    
+    print(f'Registered server: {registered_server}')
     
     encrypted_data = fernet_private.encrypt(cleartext.encode()).decode()
     

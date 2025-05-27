@@ -1,6 +1,6 @@
 from http import HTTPStatus
-from common.response_fields import DATA, ENCRYPTED, ERROR, SUCCESS
-from common.structures import RegisteredServer, Result
+from common.response_fields import DATA, ENCRYPTED, ERROR, SUCCESS, SERVER_ID
+from common.structures import ServerLoad, Result
 from database.model.database_actions import get_server_key, get_servers_with_user_count, register_server, update_users_balance
 from database.orm.orm import GameServer
 from flask import Blueprint, jsonify, request
@@ -18,7 +18,7 @@ def get_active_servers_route():
     if servers is None:
         return jsonify({ERROR: 'Error in retrieving servers\'loads'}), HTTPStatus.INTERNAL_SERVER_ERROR
     
-    servers = [RegisteredServer.from_tuple(server) for server in servers]
+    servers = [ServerLoad.from_tuple(server) for server in servers]
         
     return jsonify({DATA: [server.to_dict() for server in servers]}), HTTPStatus.OK
 
@@ -38,10 +38,11 @@ def register_server_route():
         print(f'Error parsing server data: {e}')
         return jsonify({ERROR: f'Invalid data {data}'}), HTTPStatus.BAD_REQUEST
     
-    if not register_server(server):
+    id = register_server(server)
+    if not id:
         return jsonify({ERROR: 'Failed to register the server'}), HTTPStatus.INTERNAL_SERVER_ERROR
 
-    return jsonify({SUCCESS: True}), HTTPStatus.CREATED
+    return jsonify({SERVER_ID: id}), HTTPStatus.CREATED
 
 @servers_routes_bp.route('/key', methods=['GET'])
 def get_server_key_route():
