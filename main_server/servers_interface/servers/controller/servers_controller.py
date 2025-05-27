@@ -36,13 +36,10 @@ def index():
     
     # register the server in the database
     result = post_request(DATABASE_URL, REGISTER_NEW_SERVER_API_ENDPOINT, server.to_dict())
-    print(f'Result of server registration: {result}')
     if result.get(ERROR):
         return result
     
     registered_server = RegisteredServer(server.ip, server.port, server.key, result.get(SERVER_ID))
-    
-    print(f'Registered server: {registered_server}')
     
     encrypted_data = fernet_private.encrypt(cleartext.encode()).decode()
     
