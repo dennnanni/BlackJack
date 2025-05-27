@@ -2,7 +2,7 @@ from common.response_fields import ERROR
 import requests
 
 
-def make_request(method, url, endpoint, *, params=None, json_data=None):
+def make_request(method, url, endpoint, *, params=None, json_data=None, headers=None):
     """
     Performs a HTTP request to the database server.
 
@@ -17,7 +17,7 @@ def make_request(method, url, endpoint, *, params=None, json_data=None):
     """
     url = f'{url}/{endpoint}'
     try:
-        response = requests.request(method, url, params=params, json=json_data, timeout=5)
+        response = requests.request(method, url, params=params, json=json_data, headers=headers, timeout=5)
 
         try:
             response_data = response.json()

@@ -138,3 +138,39 @@ An ecrypted string containing `Server` object as JSON. The encryption should be 
     | encrypted | string | returns the input data encrypted with the transmitted key for validation |
 
 - `400 BAD REQUEST`
+
+> **POST** `/results`
+
+#### INPUT HEADERS:
+- `X-Server-ID`: string containing the game server ID.
+
+#### INPUT FIELDS
+
+A JWT token cointaining a list of `Result` as dictionaries.
+
+| Field name | Type | Description |
+| ----------- | ----------- | ----------- |
+| token | jwt | list of result as dictionaries  | 
+
+`Result` objects are in form:
+
+| Field name | Type | Description |
+| ----------- | ----------- | ----------- |
+| username | string |  | 
+| balance_difference | float | |
+
+    [
+        {
+            'username': 'alice',
+            'balance_difference': 50
+        },
+        {
+            'username': 'bob',
+            'balance_difference': -100
+        }
+    ]
+
+#### OUTPUT
+
+- `201 OK`
+- `400 BAD REQUEST`

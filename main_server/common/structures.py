@@ -88,3 +88,12 @@ class RegisteredServer(Server):
             max_users=data[4],
             key=data[5] if len(data) > 5 else None
         )
+
+@dataclass
+class Result:
+    username: str
+    balance_difference: float
+    
+    def to_dict(self):
+        return asdict(self)
+    
