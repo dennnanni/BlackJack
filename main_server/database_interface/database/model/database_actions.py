@@ -143,9 +143,7 @@ def update_users_balance(results):
             for result in results:
                 user = session.query(User).filter(User.username == result.username).first()
                 if user:
-                    if user.balance + result.balanceDifference != result.newBalance:
-                        raise ValueError(f'Balance mismatch for user {result.username}: expected {result.newBalance}, got {user.balance + result.balanceDifference}')
-                    user.balance += result.balanceDifference
+                    user.balance += result.balance_difference
             session.commit()
             return True
     except SQLAlchemyError as e:

@@ -38,13 +38,12 @@ def test_registration():
 def test_publish_results():
     server_id = 18
     test_data = [
-        Result('den', 100, 100).to_dict(),
-        Result('ago', 200, 300).to_dict(),
-        Result('nicola', -25, 25).to_dict()
+        Result('den', 100).to_dict(),
+        Result('ago', 200).to_dict(),
+        Result('nicola', -25).to_dict()
     ]
     
     token = {
-        'server_id': server_id,
         'results': test_data
     }
         

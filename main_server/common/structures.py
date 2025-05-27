@@ -92,8 +92,7 @@ class RegisteredServer(Server):
 @dataclass
 class Result:
     username: str
-    balanceDifference: float
-    newBalance: float
+    balance_difference: float
     
     def to_dict(self):
         return asdict(self)
