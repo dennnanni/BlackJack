@@ -2,7 +2,7 @@ from client.constants import GAME_SERVERS_API_ENDPOINT
 from common.http_requests import get_request
 from common.response_fields import DATA, ERROR
 from common.structures import ServerLoad
-from servers import DATABASE_URL
+from client import DATABASE_URL
 
 
 class Dispatcher:

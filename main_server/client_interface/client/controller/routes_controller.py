@@ -1,10 +1,10 @@
-from client.constants import LOGIN_API_ENDPOINT, LOGIN_PAGE_PATH, REGISTER_API_ENDPOINT, SALT_API_ENDPOINT, USER_HOME_PATH
+from client.constants import INITIAL_BALANCE, LOGIN_API_ENDPOINT, LOGIN_PAGE_PATH, REGISTER_API_ENDPOINT, SALT_API_ENDPOINT, USER_HOME_PATH
 from client.model.structures import UserSession
 from client.utils.security import generate_hashed_password, get_hashed_password
 from common.http_requests import get_request, post_request
 from common.response_fields import ERROR, REDIRECT, SALT, SUCCESS
 from client import DATABASE_URL
-from main_server.common.structures import UserLogin, UserDatabase
+from common.structures import UserLogin, UserDatabase
 from flask_login import login_user as flask_login_user
 
 
@@ -42,7 +42,7 @@ def register_user(username, password):
         return {ERROR: 'Username and password are required'}
     
     hashed_password, salt = generate_hashed_password(password)
-    user_db = UserDatabase(username=username, password=hashed_password, salt=salt, balance=0.0)
+    user_db = UserDatabase(username=username, password=hashed_password, salt=salt, balance=INITIAL_BALANCE)
 
     register_response = post_request(DATABASE_URL, REGISTER_API_ENDPOINT, user_db.to_dict())
     if register_response.get(ERROR):
