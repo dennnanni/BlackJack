@@ -3,7 +3,7 @@ from client.model.structures import UserSession
 from client.utils.security import generate_hashed_password, get_hashed_password
 from common.http_requests import get_request, post_request
 from common.response_fields import ERROR, REDIRECT, SALT, SUCCESS
-from servers import DATABASE_URL
+from client import DATABASE_URL
 from main_server.common.structures import UserLogin, UserDatabase
 from flask_login import login_user as flask_login_user
 

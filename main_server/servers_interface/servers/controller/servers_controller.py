@@ -46,7 +46,7 @@ def index():
     # success message contains data sent from the server encrypted with its key for validity
     return jsonify({ENCRYPTED: encrypted_data}), HTTPStatus.CREATED
 
-@servers_bp.route('/result', methods=['POST'])
+@servers_bp.route('/results', methods=['POST'])
 def publish_results_route():
     data = request.get_json()
     if not data or TOKEN not in data:

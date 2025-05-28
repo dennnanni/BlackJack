@@ -2,7 +2,7 @@ from http import HTTPStatus
 from common.response_fields import DATA, ERROR, SALT, SUCCESS, PLAYING
 from flask import Blueprint, jsonify, request
 from database.model.database_actions import add_user, get_user, is_user_playing
-from main_server.common.structures import UserDatabase, UserInfo, UserLogin
+from common.structures import UserDatabase, UserInfo, UserLogin
 
 users_routes_bp = Blueprint('users_db', __name__)
 

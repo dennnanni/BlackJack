@@ -1,10 +1,44 @@
 services:
-  game_server:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: blackjack
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  servers_interface:
     build: .
-    command: poetry run game_server
+    command: poetry run servers
     ports:
-      - "80:80"
+      - "16001:5002"
+    environment:
+      - SERVER_PORT=16001
+      - DATABASE_URL=http://database_interface:5001
+    volumes:
+      - ./:/var/www
 
   database_interface:
     build: .
-    command: poetry run database_interface
+    command: poetry run database
+    environment:
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
+    depends_on:
+      - postgres
+    volumes:
+      - ./:/var/www
+
+  client_interface:
+    build: .
+    command: poetry run client
+    ports:
+      - "16000:5000"
+    environment:
+      - CLIENT_PORT=16000
+      - DATABASE_URL=http://database_interface:5001
+    volumes:
+      - ./:/var/www
+
+volumes:
+  postgres_data:

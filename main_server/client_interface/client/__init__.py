@@ -10,8 +10,12 @@ load_dotenv()
 
 SHARED_SECRET = os.getenv('SHARED_SECRET').encode()
 if not SHARED_SECRET:
-    raise ValueError("SHARED_SECRET environment variable not set")
+    raise ValueError('SHARED_SECRET environment variable not set')
 fernet_shared_secret = Fernet(SHARED_SECRET)
+
+DATABASE_URL = os.getenv('DATABASE_URL', 'http://localhost:5001')
+if not DATABASE_URL:
+    raise ValueError('DATABASE_URL environment variable is not set')
 
 socketio = SocketIO(cors_allowed_origins="*", manage_session=False)
 
