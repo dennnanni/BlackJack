@@ -1,3 +1,4 @@
+from dataclasses import asdict, dataclass
 import random
 
 class Table:
@@ -218,18 +219,13 @@ class Card:
             return self.type == other.type and self.suit == other.suit
         return False
     
+@dataclass
 class Result:
-    def __init__(self, username, balanceDifference, newBalance):
-        self.username = username
-        self.balanceDifference = balanceDifference
-        self.newBalance = newBalance
+    username: str
+    balance_difference: float
     
     def to_dict(self):
-        return {
-            "username": self.username,
-            "balance_change": self.balanceDifference,
-            "new_balance": self.newBalance
-        }
+        asdict(self)
         
 class Hand:
     BLACKJACK = 21
