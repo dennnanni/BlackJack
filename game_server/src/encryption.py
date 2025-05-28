@@ -2,16 +2,10 @@ import json
 from typing import Union
 from cryptography.fernet import Fernet
 
-def get_fernet(key: Union[str, bytes]) -> Fernet:
-    return Fernet(key)
+def encrypt_with_key(payload: dict, key: bytes) -> str:
+    fernet = Fernet(key)
+    return fernet.encrypt(json.dumps(payload).encode()).decode()
 
-def encrypt_with_key(data: dict, key: Union[str, bytes]) -> str:
-    fernet = get_fernet(key)
-    json_data = json.dumps(data).encode()
-    encrypted = fernet.encrypt(json_data)
-    return encrypted.decode()
-
-def decrypt_with_key(token: str, key: Union[str, bytes]) -> dict:
-    fernet = get_fernet(key)
-    decrypted = fernet.decrypt(token.encode())
-    return json.loads(decrypted.decode())
+def decrypt_with_key(encrypted_data: str, key: bytes) -> str:
+    fernet = Fernet(key)
+    return fernet.decrypt(encrypted_data.encode()).decode()

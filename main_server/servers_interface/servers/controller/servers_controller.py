@@ -15,14 +15,19 @@ servers_bp = Blueprint('servers', __name__)
 
 @servers_bp.route('/register', methods=['POST'])
 def index():
-    data = request.get_data()
-    if not data:
+    data = request.get_json(silent=True)
+    if not data or 'encrypted' not in data:
         return jsonify({ERROR: 'No data provided'}), HTTPStatus.BAD_REQUEST
     
-    # decrypt the message with the shared secret
-    cleartext = fernet_shared_secret.decrypt(data).decode()
-    
-    print(f'Decrypted data: {cleartext}')
+    try:
+        print("a")
+        encrypted_payload = data["encrypted"].encode()  # encoded base64 string
+        print("b")
+        # decrypt the message with the shared secret
+        cleartext = fernet_shared_secret.decrypt(encrypted_payload).decode()
+        print(f'Decrypted data: {cleartext}')
+    except Exception as e:
+        return jsonify({ERROR: f'Invalid encrypted data: {e}'}), HTTPStatus.BAD_REQUEST
     
     try:
         dict = json.loads(cleartext)
@@ -40,8 +45,12 @@ def index():
         return result
     
     registered_server = RegisteredServer(server.ip, server.port, server.key, result.get(SERVER_ID))
-    
-    encrypted_data = fernet_private.encrypt(cleartext.encode()).decode()
+    response_payload = {
+        **json.loads(cleartext),
+        "server_id": result.get(SERVER_ID)
+    }
+    encrypted_data = fernet_private.encrypt(json.dumps(response_payload).encode()).decode()
+
     
     # success message contains data sent from the server encrypted with its key for validity
     return jsonify({ENCRYPTED: encrypted_data}), HTTPStatus.CREATED
