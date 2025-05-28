@@ -1,69 +1,38 @@
-# import requests
-
-# class CentralServerClient:
-#     def __init__(self, base_url):
-#         self.base_url = base_url
-
-#     def register_game_server(self, server_id, host, port):
-#         try:
-#             response = requests.post(f"{self.base_url}/register", json={
-#                 "server_id": server_id,
-#                 "host": host,
-#                 "port": port
-#             }, timeout=5)
-#             response.raise_for_status()
-#             return response.json()
-#         except requests.RequestException as e:
-#             print(f"[!] Errore registrazione server: {e}")
-#             return None
-
-#     def send_results(self, results):
-#         try:
-#             response = requests.post(f"{self.base_url}/results", json={"results": results}, timeout=5)
-#             response.raise_for_status()
-#         except requests.RequestException as e:
-#             print(f"[!] Errore invio risultati: {e}")
-
-#     def update_user_list(self, server_id, users):
-#         try:
-#             response = requests.post(f"{self.base_url}/users", json={
-#                 "server_id": server_id,
-#                 "users": users
-#             }, timeout=5)
-#             response.raise_for_status()
-#         except requests.RequestException as e:
-#             print(f"[!] Errore aggiornamento lista utenti: {e}")
-
 import requests
-from src.encryption import encrypt_with_key
+from src.encryption import encrypt_with_key, decrypt_with_key
 
 
 class CentralServerAPI:
-    def __init__(self, base_url: str, shared_secret: bytes, server_id):
+    def __init__(self, base_url: str):
         self.base_url = base_url
-        self.new_key = shared_secret
-        self.server_id = server_id
 
-    def register_game_server(self, key: bytes, host: str, port: int):
+    def register_game_server(self, host: str, port: int, shared_key, new_key):
+        self.new_key = new_key
         payload = {
-            "server_id": self.server_id,
             "host": host,
             "port": port,
-            "key": self.new_key
+            "key": self.new_key.decode()
         }
 
         try:
-            encrypted_data = encrypt_with_key(payload, key)
+            encrypted_data = encrypt_with_key(payload, shared_key)
             response = requests.post(
                 f"{self.base_url}/register",
                 json={"data": encrypted_data},
                 timeout=5
             )
             response.raise_for_status()
-            return response.json()
+            encrypted_response = response.json().get("data")
+            if encrypted_response:
+                decrypted_data = decrypt_with_key(encrypted_response, shared_key)
+                self.server_id = decrypted_data.get("server_id")
+            else:
+                raise ValueError("No data field in response")
+            
+            return True
         except requests.RequestException as e:
             print(f"[!] Errore registrazione server: {e}")
-            return None
+            return False
 
     def send_results(self, results: list):
         results_payload = [r.to_dict() for r in results]

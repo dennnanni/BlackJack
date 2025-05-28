@@ -42,7 +42,7 @@ def register_event_handlers(socketio):
                 'dealer_cards': [str(c) for c in table.get_game().get_dealer_hand()]
             }, to=room_id)
             
-        central_client.update_user_list(user_map.keys())
+        central_client.update_user_list(list(user_map.keys()))
 
     @socketio.on("bet")
     def handle_bet(data):
