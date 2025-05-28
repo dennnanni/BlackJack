@@ -44,10 +44,10 @@ services:
     build: .
     command: poetry run game_server
     ports:
-      - "5000:8001"
+      - "5003:5003"
     environment:
-      SERVER_HOST: "0.0.0.0"
-      SERVER_PORT: "8001"
+      SERVER_HOST: "127.0.0.1"
+      SERVER_PORT: "5003"
       CENTRAL_SERVER_URL: "http://servers_interface:5002"
 
 volumes:
