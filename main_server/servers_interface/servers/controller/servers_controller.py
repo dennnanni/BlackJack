@@ -1,9 +1,8 @@
 from http import HTTPStatus
 import json
-from xml.dom.domreg import registered
 from common.http_requests import get_request, post_request
 from common.response_fields import ENCRYPTED, ERROR, SERVER_ID, SUCCESS, TOKEN
-from common.structures import RegisteredServer, Server
+from common.structures import Server
 from flask import Blueprint, jsonify, request
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
@@ -13,19 +12,17 @@ from cryptography.fernet import Fernet
 
 servers_bp = Blueprint('servers', __name__)
 
+
 @servers_bp.route('/register', methods=['POST'])
 def index():
     data = request.get_json(silent=True)
-    if not data or 'encrypted' not in data:
+    if not data or ENCRYPTED not in data:
         return jsonify({ERROR: 'No data provided'}), HTTPStatus.BAD_REQUEST
     
     try:
-        print("a")
-        encrypted_payload = data["encrypted"].encode()  # encoded base64 string
-        print("b")
+        encrypted_payload = data[ENCRYPTED].encode()  # encoded base64 string
         # decrypt the message with the shared secret
         cleartext = fernet_shared_secret.decrypt(encrypted_payload).decode()
-        print(f'Decrypted data: {cleartext}')
     except Exception as e:
         return jsonify({ERROR: f'Invalid encrypted data: {e}'}), HTTPStatus.BAD_REQUEST
     
@@ -42,15 +39,13 @@ def index():
     # register the server in the database
     result = post_request(DATABASE_URL, REGISTER_NEW_SERVER_API_ENDPOINT, server.to_dict())
     if result.get(ERROR):
-        return result
+        return jsonify(result), HTTPStatus.BAD_REQUEST
     
-    registered_server = RegisteredServer(server.ip, server.port, server.key, result.get(SERVER_ID))
     response_payload = {
         **json.loads(cleartext),
         "server_id": result.get(SERVER_ID)
     }
     encrypted_data = fernet_private.encrypt(json.dumps(response_payload).encode()).decode()
-
     
     # success message contains data sent from the server encrypted with its key for validity
     return jsonify({ENCRYPTED: encrypted_data}), HTTPStatus.CREATED
