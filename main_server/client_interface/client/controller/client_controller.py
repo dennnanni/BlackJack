@@ -1,5 +1,5 @@
 from client.utils.security import create_token
-from client.constants import PLAYING_API_ENDPOINT, USER_INFO_API_ENDPOINT
+from client.constants import JOIN_TABLE_API_ENDPOINT, PLAYING_API_ENDPOINT, USER_INFO_API_ENDPOINT
 from client.controller.dispatcher import Dispatcher
 from common.http_requests import get_request
 from common.response_fields import DATA, ERROR, REDIRECT, TOKEN
@@ -44,8 +44,10 @@ def get_game_server(data):
         raise ValueError(f'Server {server.get_url()} key is not set')
     
     token = create_token(username, server)
+
+    print(server.get_url() + JOIN_TABLE_API_ENDPOINT)
     
     return {
-        REDIRECT: server.get_url(),
+        REDIRECT: server.get_url() + JOIN_TABLE_API_ENDPOINT,
         TOKEN: token
     }    
