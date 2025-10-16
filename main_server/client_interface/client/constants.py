@@ -15,6 +15,8 @@ USER_HOME_PATH = '/user/'
 LOGIN_PAGE_PATH = '/login'
 REGISTER_PAGE_PATH = '/register'
 
+# Path to external API
+JOIN_TABLE_API_ENDPOINT = '/join'
 
 # Values
 INITIAL_BALANCE = 1000
