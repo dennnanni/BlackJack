@@ -15,5 +15,5 @@ def test_game_betting_and_result():
 
     results = game.determine_result()
     assert results[0].username == "Charlie"
-    assert results[0].balanceDifference == 20
+    assert results[0].balance_difference == 20
     assert user.get_balance() == 120

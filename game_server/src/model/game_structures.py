@@ -99,7 +99,7 @@ class Game:
         for user in self.__active_users:
             diff = self._determine_difference(user)
             user.update_balance(diff)
-            result = Result(user.get_username(), diff, user.get_balance())
+            result = Result(user.get_username(), diff)
             results.append(result)
         return results
                 
@@ -112,10 +112,13 @@ class Game:
             return 0
         
     def _is_winner(self, user):
-        """Controlla se l'utente ha vinto la mano, non considera il pareggio."""
-        return not Hand.is_busted(user.get_hand()) and \
-            Hand.get_hand_value(self.__dealer_hand) < Hand.get_hand_value(user.get_hand()) or \
-            Hand.is_blackjack(user.get_hand()) and not Hand.is_blackjack(self.__dealer_hand)
+        dealer_value = Hand.get_hand_value(self.__dealer_hand)
+        user_value = Hand.get_hand_value(user.get_hand())
+        if Hand.is_busted(user.get_hand()):
+            return False
+        if Hand.is_blackjack(user.get_hand()) and not Hand.is_blackjack(self.__dealer_hand):
+            return True
+        return user_value > dealer_value
 
     def player_double_down(self, user):
         self.place_bet(user, self.__bets[user] * 2)
