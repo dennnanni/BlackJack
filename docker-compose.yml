@@ -16,14 +16,18 @@ services:
     environment:
       - SERVER_PORT=16001
       - DATABASE_URL=http://database_interface:5001
+      - PYTHONUNBUFFERED=1
     volumes:
       - ./:/var/www
+    depends_on:
+      - database_interface
 
   database_interface:
     build: .
     command: poetry run database
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
+      - PYTHONUNBUFFERED=1
     depends_on:
       - postgres
     volumes:
@@ -44,11 +48,13 @@ services:
     build: .
     command: poetry run game_server
     ports:
-      - "5003:5003"
+      - "8000:8000"
     environment:
       SERVER_HOST: "127.0.0.1"
-      SERVER_PORT: "5003"
+      SERVER_PORT: "8000"
       CENTRAL_SERVER_URL: "http://servers_interface:5002"
+      
+  
 
 volumes:
   postgres_data:

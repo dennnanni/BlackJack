@@ -24,7 +24,7 @@ def test_registration():
     # Encrypt the test data
     encrypted_data = fernet_shared_secret.encrypt(json.dumps(test_data).encode())
     
-    response = requests.post("http://localhost:5002/register", data=encrypted_data)
+    response = requests.post("http://localhost:16001/register", json={ENCRYPTED: encrypted_data.decode()})
     print(f"Response status code: {response.status_code}")
     
     content = response.json()

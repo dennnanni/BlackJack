@@ -28,7 +28,7 @@ class CentralServerAPI:
                 decrypted_data = json.loads(decrypt_with_key(encrypted_response, self.new_key))
                 self.server_id = decrypted_data.get("server_id")
             else:
-                raise ValueError("No data field in response")
+                raise ValueError("No encrypted field in response")
             
             return True
         except requests.RequestException as e:
