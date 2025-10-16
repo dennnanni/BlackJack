@@ -7,7 +7,7 @@ game_bp = Blueprint('game', __name__)
 def index():
     return render_template('index.html', title='Game Server')
 
-@game_bp.route('/join', methods=['POST'])
+@game_bp.route('/', methods=['POST'])
 def join():
     data = request.json
     token = data.get('token')
