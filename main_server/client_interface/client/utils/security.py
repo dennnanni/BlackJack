@@ -18,7 +18,7 @@ def create_token(username, server):
         'server_port': server.port,
     }
     
-    return jwt.encode(token, private_key, algorithm='HS256')
+    return jwt.encode(token, private_key.encode(), algorithm='HS256')
 
 def get_hashed_password(password, salt):
     salt_bytes = base64.b64decode(salt) if isinstance(salt, str) else salt

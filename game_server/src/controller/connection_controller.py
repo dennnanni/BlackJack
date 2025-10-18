@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, g
 import jwt
-from src.config.settings import SHARED_SECRET
+from src import key
 game_bp = Blueprint('game', __name__)
 
 @game_bp.route('/')
@@ -9,15 +9,13 @@ def index():
 
 @game_bp.route('/join', methods=['POST'])
 def join():
-    data = request.json
-    token = data.get('token')
+    token = request.form.get('token')
     if not token:
-        return jsonify({"error": "Token mancante"}), 400
-    
+        return jsonify({'error': 'Token is required'}), 400
     try:
-        payload = jwt.decode(token, SHARED_SECRET, algorithms=['HS256'])
+        payload = jwt.decode(token, key, algorithms=['HS256'])
         g.user = payload
-    except jwt.InvalidTokenError:
+    except jwt.InvalidTokenError as error:
         return jsonify({'success': False, 'message': 'Invalid token'}), 401
 
-    return jsonify({"status": "ok", "username": payload["username"]}), 200
+    return jsonify({'status': 'ok', 'username': payload['username']}), 200
