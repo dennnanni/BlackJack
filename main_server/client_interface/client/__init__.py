@@ -22,6 +22,7 @@ socketio = SocketIO(cors_allowed_origins="*", manage_session=False)
 def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = 'secret!'
+    app.config['SESSION_PERMANENT'] = False
     
     from .routes import register_routes
     register_routes(app)
