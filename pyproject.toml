@@ -11,7 +11,8 @@ packages = [
     { include = "src", from = "game_server" },
     { include = "database", from = "main_server/database_interface" },
     { include = "client", from = "main_server/client_interface" },
-    { include = "servers", from = "main_server/servers_interface" }
+    { include = "servers", from = "main_server/servers_interface" },
+    { include = "central_server" }
 ]
 
 [tool.poetry.dependencies]
@@ -36,6 +37,7 @@ database = "database_interface.database.main:main"
 client = "client_interface.client.main:main"
 servers = "servers_interface.servers.main:main"
 game_server = "game_server.src.main:main"
+central = "central_server.main:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

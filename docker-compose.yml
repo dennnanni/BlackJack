@@ -46,7 +46,7 @@ services:
 
   central_server:
     build: .
-    command: poetry run central_server
+    command: poetry run central
     ports:
       - "5000:5000"
     environment:
