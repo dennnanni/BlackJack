@@ -5,6 +5,9 @@ from flask_login import LoginManager
 from cryptography.fernet import Fernet
 from dotenv import load_dotenv
 import os
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.engine import URL
 
 load_dotenv()
 
@@ -16,6 +19,18 @@ fernet_shared_secret = Fernet(SHARED_SECRET)
 DATABASE_URL = os.getenv('DATABASE_URL')
 if not DATABASE_URL:
     raise ValueError('DATABASE_URL environment variable is not set')
+
+url = None
+if not url:
+    url = URL.create(
+        drivername="postgresql",
+        username="postgres",
+        password="postgres",
+        host="localhost",
+        database="BlackJack"
+    )
+engine = create_engine(url)
+SessionLocal = sessionmaker(bind=engine)
 
 socketio = SocketIO(cors_allowed_origins="*", manage_session=False)
 

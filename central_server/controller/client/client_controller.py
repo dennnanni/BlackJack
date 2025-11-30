@@ -1,9 +1,8 @@
 from central_server.utils.security import create_token
-from central_server.constants.client_constants import JOIN_TABLE_API_ENDPOINT, PLAYING_API_ENDPOINT, USER_INFO_API_ENDPOINT
+from central_server.constants.client_constants import JOIN_TABLE_API_ENDPOINT
 from central_server.controller.client.dispatcher import Dispatcher
-from common.http_requests import get_request
-from common.response_fields import DATA, ERROR, REDIRECT, TOKEN
-from central_server import DATABASE_URL
+from central_server.constants.response_fields import DATA, ERROR, REDIRECT, TOKEN
+import central_server.controller.database.database_controller as database
 
 dispatcher = Dispatcher()
 
@@ -12,10 +11,12 @@ def get_user_info(data):
     if not username:
         return {ERROR: 'Username is required'}
 
-    user_info_response = get_request(DATABASE_URL, USER_INFO_API_ENDPOINT, {'username': username})
-    
-    return user_info_response
-    
+    user_info = database.get_user_info(username)    
+
+    if isinstance(user_info, str):
+        return {ERROR: user_info}
+
+    return {DATA: user_info.to_dict()}
 
 def get_game_server(data):
     print('Requesting game server')
@@ -23,7 +24,7 @@ def get_game_server(data):
     if not username:
         return {ERROR: 'Username is required'}
     
-    user_info = get_user_info(data)
+    user_info = database.get_user_info(username)
     if user_info.get(ERROR) or not user_info.get(DATA):
         return user_info
     
@@ -31,10 +32,10 @@ def get_game_server(data):
     if float(balance) <= 0:
         return {ERROR: 'User balance is zero, please add funds to play'}
     
-    user_status = get_request(DATABASE_URL, PLAYING_API_ENDPOINT, {'username': username})
+    user_status = database.user_playing(username)
     
-    if user_status.get(ERROR):
-        return user_status
+    if isinstance(user_status, str):
+        return {ERROR: user_status}
     
     server, error = dispatcher.pick_game_server()
     if error is not None:

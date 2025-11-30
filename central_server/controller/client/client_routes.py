@@ -26,9 +26,9 @@ def register():
 
 @client_bp.route('/login', methods=['POST'])
 def login_post():
-    response = login_user(request.form.get('username'), request.form.get('password'))
+    result = login_user(request.form.get('username'), request.form.get('password'))
     session.permanent = False
-    return redirect(response.get(REDIRECT)) if response.get(REDIRECT) else render_template('access.html', login=True, error=response.get(ERROR))
+    return redirect(result.get(REDIRECT)) if result.get(REDIRECT) else render_template('access.html', login=True, error=result.get(ERROR))
 
 @client_bp.route('/register', methods=['POST'])
 def register_post():
