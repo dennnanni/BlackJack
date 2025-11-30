@@ -8,41 +8,51 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  servers_interface:
-    build: .
-    command: poetry run servers
-    ports:
-      - "16001:5002"
-    environment:
-      - SERVER_PORT=16001
-      - DATABASE_URL=http://database_interface:5001
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./:/var/www
-    depends_on:
-      - database_interface
+  # servers_interface:
+  #   build: .
+  #   command: poetry run servers
+  #   ports:
+  #     - "16001:5002"
+  #   environment:
+  #     - SERVER_PORT=16001
+  #     - DATABASE_URL=http://database_interface:5001
+  #     - PYTHONUNBUFFERED=1
+  #   volumes:
+  #     - ./:/var/www
+  #   depends_on:
+  #     - database_interface
 
-  database_interface:
+  # database_interface:
+  #   build: .
+  #   command: poetry run database
+  #   environment:
+  #     - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
+  #     - PYTHONUNBUFFERED=1
+  #   depends_on:
+  #     - postgres
+  #   volumes:
+  #     - ./:/var/www
+
+  # client_interface:
+  #   build: .
+  #   command: poetry run client
+  #   ports:
+  #     - "16000:5000"
+  #   environment:
+  #     - CLIENT_PORT=16000
+  #     - DATABASE_URL=http://database_interface:5001
+  #   volumes:
+  #     - ./:/var/www
+
+  central_server:
     build: .
-    command: poetry run database
+    command: poetry run central_server
+    ports:
+      - "5000:5000"
     environment:
+      - CENTRAL_SERVER_PORT=5000
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
-      - PYTHONUNBUFFERED=1
-    depends_on:
-      - postgres
-    volumes:
-      - ./:/var/www
 
-  client_interface:
-    build: .
-    command: poetry run client
-    ports:
-      - "16000:5000"
-    environment:
-      - CLIENT_PORT=16000
-      - DATABASE_URL=http://database_interface:5001
-    volumes:
-      - ./:/var/www
 
   game_server_1:
     build: .
