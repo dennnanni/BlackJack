@@ -8,8 +8,9 @@ import time
 import jwt
 import requests
 
-from game_server.config import CENTRAL_URL, SHARED_SECRET
-from shared.messages import HOST, PORT, RESULTS, SERVER_ID
+from game_server.config import CAPACITY, CENTRAL_URL, SHARED_SECRET
+from shared.messages import CAPACITY as CAPACITY_FIELD
+from shared.messages import HOST, LOAD, PORT, RESULTS, SERVER_ID
 
 SERVER_TOKEN_TTL = 60
 
@@ -31,7 +32,7 @@ class CentralClient:
         """Announce this server to central; stores the assigned server id."""
         try:
             response = requests.post(f'{self.base_url}/api/servers/register',
-                                     json={HOST: host, PORT: port},
+                                     json={HOST: host, PORT: port, CAPACITY_FIELD: CAPACITY},
                                      headers=self._bearer(), timeout=5)
             response.raise_for_status()
             self.server_id = response.json()[SERVER_ID]
@@ -39,6 +40,16 @@ class CentralClient:
         except (requests.RequestException, KeyError, ValueError) as e:
             print(f'[central] registration failed: {e}')
             return False
+
+    def heartbeat(self, load):
+        """Report liveness and current load; returns the HTTP status or None."""
+        try:
+            response = requests.post(f'{self.base_url}/api/servers/heartbeat',
+                                     json={LOAD: load},
+                                     headers=self._bearer(), timeout=5)
+            return response.status_code
+        except requests.RequestException:
+            return None
 
     def send_results(self, results):
         try:

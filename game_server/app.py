@@ -1,16 +1,31 @@
 import sys
+import threading
 import time
 
 from flask import Flask
 from flask_socketio import SocketIO
 
 from game_server.central_client import client
-from game_server.config import SECRET_KEY, SERVER_HOST, SERVER_PORT
+from game_server.config import (HEARTBEAT_INTERVAL, SECRET_KEY, SERVER_HOST,
+                                SERVER_PORT)
 
 socketio = SocketIO()
 
 REGISTRATION_ATTEMPTS = 5
 REGISTRATION_RETRY_SECONDS = 2
+
+
+def _heartbeat_loop():
+    """Failure detection: tell central every few seconds that this server is
+    alive and how many players it is carrying."""
+    from game_server.events import connected_players
+    from http import HTTPStatus
+    while True:
+        time.sleep(HEARTBEAT_INTERVAL)
+        status = client.heartbeat(connected_players())
+        if status == HTTPStatus.NOT_FOUND:
+            # Central lost our registration (e.g. registry reset): re-register.
+            client.register(SERVER_HOST, SERVER_PORT)
 
 
 def create_app():
@@ -36,5 +51,7 @@ def create_app():
 
     from game_server.events import register_event_handlers
     register_event_handlers(socketio)
+
+    threading.Thread(target=_heartbeat_loop, name='heartbeat', daemon=True).start()
 
     return app

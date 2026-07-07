@@ -19,4 +19,9 @@ SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_hex(32))
 # short enough that a leaked token goes stale quickly.
 JOIN_TOKEN_TTL = 120
 
+# A game server is considered offline once its last heartbeat is older than
+# this (3x the game servers' heartbeat interval, to forgive lost beats).
+HEARTBEAT_TTL = int(os.getenv('HEARTBEAT_TTL', '15'))
+REAPER_INTERVAL = int(os.getenv('REAPER_INTERVAL', '5'))
+
 INITIAL_BALANCE = 1000

@@ -4,6 +4,7 @@ from flask_login import LoginManager
 from central_server import db
 from central_server.api import api_bp
 from central_server.config import SECRET_KEY
+from central_server.reaper import start_reaper
 from central_server.web import UserSession, web_bp
 
 
@@ -14,6 +15,7 @@ def create_app():
     db.init_db()
     app.register_blueprint(web_bp)
     app.register_blueprint(api_bp)
+    start_reaper()
 
     login_manager = LoginManager()
     login_manager.init_app(app)

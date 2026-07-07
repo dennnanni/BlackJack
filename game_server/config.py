@@ -12,6 +12,10 @@ SERVER_PORT = int(os.getenv('SERVER_PORT', '8000'))
 
 CENTRAL_URL = os.getenv('CENTRAL_URL', 'http://localhost:5000')
 
+# Max players this server accepts; reported to central at registration.
+CAPACITY = int(os.getenv('CAPACITY', '10'))
+HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', '5'))
+
 SHARED_SECRET = os.getenv('SHARED_SECRET')
 if not SHARED_SECRET:
     raise ValueError('SHARED_SECRET is not set: run `python secret_generator.py` first')

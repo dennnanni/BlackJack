@@ -15,5 +15,8 @@ CREATE TABLE "user" (
 CREATE TABLE gameserver (
     id SERIAL PRIMARY KEY,
     host TEXT NOT NULL,
-    port INT NOT NULL
+    port INT NOT NULL,
+    capacity INT NOT NULL DEFAULT 10,
+    load INT NOT NULL DEFAULT 0,          -- reported by heartbeats
+    last_seen DOUBLE PRECISION NOT NULL DEFAULT 0  -- unix timestamp of last heartbeat
 );

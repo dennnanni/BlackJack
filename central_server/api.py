@@ -6,7 +6,7 @@ from http import HTTPStatus
 from flask import Blueprint, jsonify, request
 
 from central_server import auth, db
-from shared.messages import ERROR, HOST, PORT, RESULTS, SERVER_ID, SUCCESS, Result
+from shared.messages import CAPACITY, ERROR, HOST, LOAD, PORT, RESULTS, SERVER_ID, SUCCESS, Result
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/servers')
 
@@ -30,14 +30,31 @@ def register():
         return error
 
     data = request.get_json(silent=True) or {}
-    host, port = data.get(HOST), data.get(PORT)
-    if not host or not isinstance(port, int):
-        return jsonify({ERROR: 'host and port are required'}), HTTPStatus.BAD_REQUEST
+    host, port, capacity = data.get(HOST), data.get(PORT), data.get(CAPACITY)
+    if not host or not isinstance(port, int) or not isinstance(capacity, int) or capacity <= 0:
+        return jsonify({ERROR: 'host, port and capacity are required'}), HTTPStatus.BAD_REQUEST
 
-    server_id = db.register_server(host, port)
+    server_id = db.register_server(host, port, capacity)
     if server_id is None:
         return jsonify({ERROR: 'Failed to register the server'}), HTTPStatus.INTERNAL_SERVER_ERROR
     return jsonify({SERVER_ID: server_id}), HTTPStatus.CREATED
+
+
+@api_bp.route('/heartbeat', methods=['POST'])
+def heartbeat():
+    payload, error = _authorized(require_server_id=True)
+    if error:
+        return error
+
+    data = request.get_json(silent=True) or {}
+    load = data.get(LOAD)
+    if not isinstance(load, int) or load < 0:
+        return jsonify({ERROR: 'load is required'}), HTTPStatus.BAD_REQUEST
+
+    if not db.heartbeat(payload[SERVER_ID], load):
+        # Unknown id (e.g. the registry was reset): the server should re-register.
+        return jsonify({ERROR: 'Unknown server id'}), HTTPStatus.NOT_FOUND
+    return jsonify({SUCCESS: True}), HTTPStatus.OK
 
 
 @api_bp.route('/results', methods=['POST'])
