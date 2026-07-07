@@ -2,6 +2,9 @@
 --CREATE DATABASE BlackJack;
 --\c BlackJack
 
+-- Reference schema. The central server also auto-creates these tables at
+-- startup via SQLAlchemy (Base.metadata.create_all).
+
 CREATE TABLE "user" (
     username TEXT PRIMARY KEY,
     password TEXT NOT NULL,
@@ -11,13 +14,6 @@ CREATE TABLE "user" (
 
 CREATE TABLE gameserver (
     id SERIAL PRIMARY KEY,
-    ip TEXT NOT NULL,
-    port INT NOT NULL,
-    key TEXT NOT NULL
-);
-
-CREATE TABLE userserver (
-    username TEXT REFERENCES "user"(username) ON DELETE CASCADE,
-    idserver INT REFERENCES gameserver(id) ON DELETE CASCADE,
-    PRIMARY KEY (username, idserver)
+    host TEXT NOT NULL,
+    port INT NOT NULL
 );

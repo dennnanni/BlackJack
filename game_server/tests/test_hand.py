@@ -1,4 +1,4 @@
-from src.model.game_structures import Card, Hand
+from game_server.game.model import Card, Hand
 
 def test_hand_value_no_ace():
     hand = [Card("10", "Spades"), Card("9", "Clubs")]

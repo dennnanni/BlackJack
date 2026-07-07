@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blackjack</title>
+</head>
+<body>
+    {% if username %}
+    <label>Welcome to the table, {{ username }}.</label>
+    {% else %}
+    <label>Blackjack game server. Join through the central server.</label>
+    {% endif %}
+</body>
+</html>

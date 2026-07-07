@@ -1,4 +1,4 @@
-from src.model.game_structures import Card, Hand, Game, User, Deck
+from game_server.game.model import Card, Hand, Game, User, Deck
 import pytest
 
 DEFAULT_SUIT = 'Hearts'

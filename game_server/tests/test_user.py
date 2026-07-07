@@ -1,4 +1,4 @@
-from src.model.game_structures import User, Card
+from game_server.game.model import User, Card
 
 def test_user_creation():
     user = User("Alice", 100)

@@ -8,53 +8,45 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  servers_interface:
+  central:
     build: .
-    command: poetry run servers
-    ports:
-      - "16001:5002"
-    environment:
-      - SERVER_PORT=16001
-      - DATABASE_URL=http://database_interface:5001
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./:/var/www
-    depends_on:
-      - database_interface
-
-  database_interface:
-    build: .
-    command: poetry run database
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
-      - PYTHONUNBUFFERED=1
-    depends_on:
-      - postgres
-    volumes:
-      - ./:/var/www
-
-  client_interface:
-    build: .
-    command: poetry run client
+    command: poetry run central
     ports:
       - "16000:5000"
     environment:
-      - CLIENT_PORT=16000
-      - DATABASE_URL=http://database_interface:5001
-    volumes:
-      - ./:/var/www
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/blackjack
+      PYTHONUNBUFFERED: "1"
+    env_file: .env
+    depends_on:
+      - postgres
 
   game_server_1:
     build: .
     command: poetry run game_server
     ports:
-      - "8000:8000"
+      - "8001:8001"
     environment:
-      SERVER_HOST: "127.0.0.1"
-      SERVER_PORT: "8000"
-      CENTRAL_SERVER_URL: "http://servers_interface:5002"
-      
-  
+      SERVER_HOST: localhost   # address the browser uses to reach this server
+      SERVER_PORT: "8001"
+      CENTRAL_URL: http://central:5000
+      PYTHONUNBUFFERED: "1"
+    env_file: .env
+    depends_on:
+      - central
+
+  game_server_2:
+    build: .
+    command: poetry run game_server
+    ports:
+      - "8002:8002"
+    environment:
+      SERVER_HOST: localhost
+      SERVER_PORT: "8002"
+      CENTRAL_URL: http://central:5000
+      PYTHONUNBUFFERED: "1"
+    env_file: .env
+    depends_on:
+      - central
 
 volumes:
   postgres_data:
