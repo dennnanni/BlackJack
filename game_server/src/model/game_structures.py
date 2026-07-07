@@ -228,7 +228,7 @@ class Result:
     balance_difference: float
     
     def to_dict(self):
-        asdict(self)
+        return asdict(self)
         
 class Hand:
     BLACKJACK = 21
