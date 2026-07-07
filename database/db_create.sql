@@ -20,3 +20,9 @@ CREATE TABLE gameserver (
     load INT NOT NULL DEFAULT 0,          -- reported by heartbeats
     last_seen DOUBLE PRECISION NOT NULL DEFAULT 0  -- unix timestamp of last heartbeat
 );
+
+-- Idempotency ledger: rounds whose results were already applied.
+CREATE TABLE applied_round (
+    round_id TEXT PRIMARY KEY,
+    applied_at DOUBLE PRECISION NOT NULL
+);

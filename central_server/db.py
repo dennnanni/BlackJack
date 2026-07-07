@@ -36,6 +36,18 @@ class GameServer(Base):
     last_seen = Column(Float, nullable=False, default=0.0)  # unix timestamp
 
 
+class AppliedRound(Base):
+    """Idempotency ledger: round ids whose results were already applied.
+
+    Game servers deliver results at-least-once (they retry until ACKed), so
+    this ledger is what turns duplicates into no-ops: exactly-once effect.
+    """
+    __tablename__ = 'applied_round'
+
+    round_id = Column(String, primary_key=True)
+    applied_at = Column(Float, nullable=False)  # unix timestamp
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 
@@ -112,16 +124,36 @@ def get_servers():
         return []
 
 
-def update_users_balance(results):
-    """Apply additive balance deltas for a list of Result records."""
+def apply_results(round_id, results):
+    """Idempotently apply the additive balance deltas of one round.
+
+    Returns True if the round is applied *or was already applied* (both mean
+    the sender can safely stop retrying), False on error. The ledger check and
+    the balance updates commit atomically: a concurrent duplicate delivery
+    dies on the primary-key conflict instead of double-applying.
+    """
     try:
         with SessionLocal() as session:
+            if session.get(AppliedRound, round_id):
+                return True  # duplicate delivery: ACK again, change nothing
             for result in results:
                 user = session.get(User, result.username)
                 if user:
                     user.balance += Decimal(str(result.balance_difference))
+            session.add(AppliedRound(round_id=round_id, applied_at=time.time()))
             session.commit()
         return True
     except SQLAlchemyError as e:
-        print(f'Error updating user balances: {e}')
+        print(f'Error applying round {round_id}: {e}')
         return False
+
+
+def prune_applied_rounds(max_age):
+    """Drop ledger entries old enough that no retry can still be in flight."""
+    try:
+        with SessionLocal() as session:
+            session.query(AppliedRound).filter(
+                AppliedRound.applied_at < time.time() - max_age).delete()
+            session.commit()
+    except SQLAlchemyError as e:
+        print(f'Error pruning applied rounds: {e}')

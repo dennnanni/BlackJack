@@ -1,8 +1,8 @@
 """Round state machine: one GameLoop thread drives the rounds of one table."""
 from threading import Event, Thread
+from uuid import uuid4
 
-from game_server.app import socketio
-from game_server.central_client import client
+from game_server.app import outbox, socketio
 from game_server.game.model import Deck, Game, Hand
 
 BET_WINDOW_SECONDS = 35
@@ -71,13 +71,15 @@ class GameLoop(Thread):
                 'cards': [str(c) for c in game.get_dealer_hand()]
             }, to=self.room_id)
 
-            # Results: apply locally, notify the room, report to central
+            # Results: persist to the outbox *first* (so a crash or a
+            # partition towards central cannot lose the finished round),
+            # then notify the room. The sender thread delivers to central.
             results = game.determine_result()
+            outbox.enqueue(str(uuid4()), results)
             socketio.emit('round_results', {
                 'results': [r.to_dict() for r in results]
             }, to=self.room_id)
 
-            client.send_results(results)
             self.table.clear_game()
             self.bets_done_event.clear()
             self.actions_done_event.clear()

@@ -6,7 +6,8 @@ from http import HTTPStatus
 from flask import Blueprint, jsonify, request
 
 from central_server import auth, db
-from shared.messages import CAPACITY, ERROR, HOST, LOAD, PORT, RESULTS, SERVER_ID, SUCCESS, Result
+from shared.messages import (CAPACITY, ERROR, HOST, LOAD, PORT, RESULTS,
+                             ROUND_ID, SERVER_ID, SUCCESS, Result)
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/servers')
 
@@ -64,11 +65,16 @@ def results():
         return error
 
     data = request.get_json(silent=True) or {}
+    round_id = data.get(ROUND_ID)
+    if not round_id or not isinstance(round_id, str):
+        return jsonify({ERROR: 'round_id is required'}), HTTPStatus.BAD_REQUEST
     try:
         round_results = [Result.from_dict(r) for r in data[RESULTS]]
     except (KeyError, TypeError, ValueError):
         return jsonify({ERROR: 'Malformed results payload'}), HTTPStatus.BAD_REQUEST
 
-    if not db.update_users_balance(round_results):
+    # Idempotent: replaying the same round_id ACKs without re-applying, so
+    # at-least-once delivery from the outbox becomes exactly-once effect.
+    if not db.apply_results(round_id, round_results):
         return jsonify({ERROR: 'Failed to persist results'}), HTTPStatus.INTERNAL_SERVER_ERROR
     return jsonify({SUCCESS: True}), HTTPStatus.OK

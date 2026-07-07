@@ -16,6 +16,9 @@ CENTRAL_URL = os.getenv('CENTRAL_URL', 'http://localhost:5000')
 CAPACITY = int(os.getenv('CAPACITY', '10'))
 HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', '5'))
 
+# On-disk store for round results not yet acknowledged by central.
+OUTBOX_PATH = os.getenv('OUTBOX_PATH', 'outbox.db')
+
 SHARED_SECRET = os.getenv('SHARED_SECRET')
 if not SHARED_SECRET:
     raise ValueError('SHARED_SECRET is not set: run `python secret_generator.py` first')

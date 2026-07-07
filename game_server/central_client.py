@@ -10,7 +10,7 @@ import requests
 
 from game_server.config import CAPACITY, CENTRAL_URL, SHARED_SECRET
 from shared.messages import CAPACITY as CAPACITY_FIELD
-from shared.messages import HOST, LOAD, PORT, RESULTS, SERVER_ID
+from shared.messages import HOST, LOAD, PORT, RESULTS, ROUND_ID, SERVER_ID
 
 SERVER_TOKEN_TTL = 60
 
@@ -51,15 +51,17 @@ class CentralClient:
         except requests.RequestException:
             return None
 
-    def send_results(self, results):
+    def send_results(self, round_id, results):
+        """Deliver one round's results; True only when central ACKed them."""
         try:
             response = requests.post(f'{self.base_url}/api/servers/results',
-                                     json={RESULTS: [r.to_dict() for r in results]},
+                                     json={ROUND_ID: round_id,
+                                           RESULTS: [r.to_dict() for r in results]},
                                      headers=self._bearer(), timeout=5)
             response.raise_for_status()
             return True
         except requests.RequestException as e:
-            print(f'[central] sending results failed: {e}')
+            print(f'[central] sending results for round {round_id} failed: {e}')
             return False
 
 

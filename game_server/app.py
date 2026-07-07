@@ -6,13 +6,16 @@ from flask import Flask
 from flask_socketio import SocketIO
 
 from game_server.central_client import client
-from game_server.config import (HEARTBEAT_INTERVAL, SECRET_KEY, SERVER_HOST,
-                                SERVER_PORT)
+from game_server.config import (HEARTBEAT_INTERVAL, OUTBOX_PATH, SECRET_KEY,
+                                SERVER_HOST, SERVER_PORT)
+from game_server.outbox import Outbox
 
 socketio = SocketIO()
+outbox = Outbox(OUTBOX_PATH)
 
 REGISTRATION_ATTEMPTS = 5
 REGISTRATION_RETRY_SECONDS = 2
+SEND_RETRY_SECONDS = 2
 
 
 def _heartbeat_loop():
@@ -26,6 +29,22 @@ def _heartbeat_loop():
         if status == HTTPStatus.NOT_FOUND:
             # Central lost our registration (e.g. registry reset): re-register.
             client.register(SERVER_HOST, SERVER_PORT)
+
+
+def _sender_loop():
+    """Drain the outbox towards central: at-least-once delivery with retry.
+
+    During a partition send_results fails, the entries stay on disk, and this
+    loop simply tries again later; central's round_id ledger makes the
+    inevitable duplicates harmless.
+    """
+    while True:
+        for round_id, results in outbox.pending():
+            if client.send_results(round_id, results):
+                outbox.ack(round_id)
+            else:
+                break  # central unreachable: back off, retry from the oldest
+        time.sleep(SEND_RETRY_SECONDS)
 
 
 def create_app():
@@ -53,5 +72,6 @@ def create_app():
     register_event_handlers(socketio)
 
     threading.Thread(target=_heartbeat_loop, name='heartbeat', daemon=True).start()
+    threading.Thread(target=_sender_loop, name='outbox-sender', daemon=True).start()
 
     return app

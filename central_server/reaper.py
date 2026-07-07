@@ -11,6 +11,9 @@ import time
 from central_server import db
 from central_server.config import HEARTBEAT_TTL, REAPER_INTERVAL
 
+# After a week no result retry can plausibly still be in flight.
+APPLIED_ROUND_RETENTION = 7 * 24 * 3600
+
 
 def _scan(known_stale):
     now = time.time()
@@ -28,6 +31,7 @@ def _run():
     while True:
         time.sleep(REAPER_INTERVAL)
         known_stale = _scan(known_stale)
+        db.prune_applied_rounds(APPLIED_ROUND_RETENTION)
 
 
 def start_reaper():

@@ -29,8 +29,11 @@ services:
       SERVER_HOST: localhost   # address the browser uses to reach this server
       SERVER_PORT: "8001"
       CENTRAL_URL: http://central:5000
+      OUTBOX_PATH: /data/outbox.db
       PYTHONUNBUFFERED: "1"
     env_file: .env
+    volumes:
+      - gs1_outbox:/data       # outbox survives container restarts
     depends_on:
       - central
 
@@ -43,10 +46,15 @@ services:
       SERVER_HOST: localhost
       SERVER_PORT: "8002"
       CENTRAL_URL: http://central:5000
+      OUTBOX_PATH: /data/outbox.db
       PYTHONUNBUFFERED: "1"
     env_file: .env
+    volumes:
+      - gs2_outbox:/data
     depends_on:
       - central
 
 volumes:
   postgres_data:
+  gs1_outbox:
+  gs2_outbox:
