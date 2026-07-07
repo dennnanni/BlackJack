@@ -1,15 +1,186 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blackjack</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #1d3b2a; color: #f4f4f4; }
+        h1 { margin-top: 0; }
+        .card { display: inline-block; margin: 4px; padding: 10px 12px; border: 1px solid #ccc;
+                border-radius: 6px; background: #fff; color: #111; font-weight: bold; }
+        .zone { background: rgba(0,0,0,.25); border-radius: 10px; padding: 14px 18px; margin-bottom: 14px; }
+        .player { margin-bottom: 8px; }
+        .me { color: #ffd966; }
+        #status { font-size: 1.1em; margin-bottom: 14px; }
+        #actions button, #actions input { font-size: 1em; padding: 8px 14px; margin-right: 6px; }
+        #actions { display: none; }
+        #bet-controls { display: none; }
+        #log { font-size: .9em; max-height: 180px; overflow-y: auto; opacity: .85; }
+        #log div { border-bottom: 1px solid rgba(255,255,255,.1); padding: 2px 0; }
+    </style>
 </head>
+
 <body>
-    {% if username %}
-    <label>Welcome to the table, {{ username }}.</label>
+    <h1>Blackjack</h1>
+
+    {% if not username %}
+    <div class="zone">
+        <p>This is a Blackjack game server. Join a table through the central server.</p>
+    </div>
     {% else %}
-    <label>Blackjack game server. Join through the central server.</label>
+    <div class="zone">
+        <strong class="me">{{ username }}</strong> — balance: $<span id="balance">{{ balance }}</span>
+    </div>
+
+    <div id="status" class="zone">Connecting to the table…</div>
+
+    <div class="zone dealer">
+        <h3>Dealer</h3>
+        <div id="dealer-cards">—</div>
+    </div>
+
+    <div class="zone">
+        <h3>Players</h3>
+        <div id="players-area">—</div>
+    </div>
+
+    <div class="zone" id="controls">
+        <span id="bet-controls">
+            <input id="bet-amount" placeholder="Your bet" type="number" min="1">
+            <button onclick="sendBet()">Place bet</button>
+        </span>
+        <span id="actions">
+            <button onclick="sendAction('hit')">Hit</button>
+            <button onclick="sendAction('stand')">Stand</button>
+            <button onclick="sendAction('double')">Double down</button>
+        </span>
+    </div>
+
+    <div class="zone">
+        <h3>Table log</h3>
+        <div id="log"></div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script>
+        const me = "{{ username }}";
+        let balance = parseFloat("{{ balance }}");
+        let myBet = 0;
+        const socket = io();
+
+        const $ = id => document.getElementById(id);
+        function setStatus(text) { $("status").innerText = text; }
+        function log(text) {
+            const line = document.createElement("div");
+            line.innerText = text;
+            $("log").prepend(line);
+        }
+        function renderCards(cards) {
+            return cards.map(c => `<span class="card">${c}</span>`).join("") || "—";
+        }
+        function showBetControls(show) { $("bet-controls").style.display = show ? "inline" : "none"; }
+        function showActions(show) { $("actions").style.display = show ? "inline" : "none"; }
+
+        socket.on("connect", () => socket.emit("join"));
+
+        socket.on("joined", data => {
+            setStatus(data.is_player ? `Seated at ${data.table_id}. Waiting for the round to start…`
+                                     : `Watching ${data.table_id}: a round is in progress, you play the next one.`);
+        });
+
+        socket.on("game_starting", () => { setStatus("Round starting…"); $("dealer-cards").innerHTML = "—"; });
+
+        socket.on("place_bets", () => {
+            setStatus("Place your bet!");
+            showBetControls(true);
+        });
+
+        socket.on("bet_confirmed", data => {
+            log(`${data.user} bet $${data.amount}`);
+            if (data.user === me) {
+                myBet = data.amount;
+                showBetControls(false);
+                setStatus("Bet placed. Waiting for the cards…");
+            }
+        });
+
+        socket.on("no_players_bet", () => {
+            setStatus("Nobody bet: round cancelled. Reload the page from the central server to play again.");
+            showBetControls(false);
+            showActions(false);
+        });
+
+        socket.on("initial_cards", data => {
+            $("players-area").innerHTML = "";
+            for (const user in data.hands) {
+                const div = document.createElement("div");
+                div.className = "player" + (user === me ? " me" : "");
+                div.innerHTML = `<strong>${user}</strong>: ${renderCards(data.hands[user])}`;
+                div.id = `hand-${user}`;
+                $("players-area").appendChild(div);
+            }
+            if (data.dealer_cards) $("dealer-cards").innerHTML = renderCards(data.dealer_cards);
+            if (data.hands[me]) {
+                setStatus("Your move: hit, stand or double down.");
+                showActions(true);
+            }
+        });
+
+        socket.on("card_drawn", data => {
+            log(`${data.user} drew ${data.card}`);
+            const hand = $(`hand-${data.user}`);
+            if (hand) hand.innerHTML += `<span class="card">${data.card}</span>`;
+        });
+
+        socket.on("player_busted", data => {
+            log(`${data.user} busted!`);
+            if (data.user === me) { setStatus("Busted! Waiting for the round to finish…"); showActions(false); }
+        });
+
+        socket.on("user_stood", data => {
+            log(`${data.user} stands`);
+            if (data.user === me) { setStatus("Standing. Waiting for the round to finish…"); showActions(false); }
+        });
+
+        socket.on("user_doubled", data => {
+            log(`${data.user} doubled down and drew ${data.card}`);
+            const hand = $(`hand-${data.user}`);
+            if (hand) hand.innerHTML += `<span class="card">${data.card}</span>`;
+            if (data.user === me) { setStatus("Doubled down. Waiting for the round to finish…"); showActions(false); }
+        });
+
+        socket.on("player_auto_stand", data => {
+            log(`${data.user} took too long: automatic stand`);
+            if (data.user === me) { showActions(false); }
+        });
+
+        socket.on("player_action_done", () => setStatus("All players done. Dealer's turn…"));
+
+        socket.on("dealer_done", data => {
+            $("dealer-cards").innerHTML = renderCards(data.cards);
+        });
+
+        socket.on("round_results", data => {
+            showActions(false);
+            showBetControls(false);
+            for (const res of data.results) {
+                const outcome = res.balance_difference > 0 ? `won $${res.balance_difference}`
+                              : res.balance_difference < 0 ? `lost $${-res.balance_difference}`
+                              : "pushed (tie)";
+                log(`${res.username} ${outcome}`);
+                if (res.username === me) {
+                    balance += res.balance_difference;
+                    $("balance").innerText = balance.toFixed(2);
+                    setStatus(`Round over: you ${outcome}. Next round starts shortly…`);
+                }
+            }
+        });
+
+        socket.on("error", data => log(`Error: ${data.message}`));
+    </script>
     {% endif %}
 </body>
+
 </html>

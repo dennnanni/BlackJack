@@ -49,4 +49,5 @@ def join():
     # Identity and balance come from the signed token, never from the client.
     session['username'] = payload['sub']
     session['balance'] = float(payload['balance'])
-    return render_template('index.html', username=payload['sub'])
+    return render_template('index.html', username=payload['sub'],
+                           balance=f"{session['balance']:.2f}")

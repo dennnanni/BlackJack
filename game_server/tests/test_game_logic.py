@@ -86,3 +86,39 @@ def test_is_winner():
     assert len(user.get_hand()) == 1  # Check if Ace is removed
     user.add_card(Card('10', DEFAULT_SUIT))  # Add 10
     assert game._is_winner(user) == False
+def test_player_below_dealer_loses_bet():
+    user = User("User1", 200)
+    game = Game([user], Deck())
+    game.place_bet(user, 50)
+
+    user.add_card(Card('10', DEFAULT_SUIT))
+    user.add_card(Card('5', DEFAULT_SUIT))       # 15
+    game.add_dealer_card(Card('10', DEFAULT_SUIT))
+    game.add_dealer_card(Card('9', DEFAULT_SUIT))  # 19
+
+    assert game._determine_difference(user) == -50
+
+def test_player_wins_when_dealer_busts():
+    user = User("User1", 200)
+    game = Game([user], Deck())
+    game.place_bet(user, 50)
+
+    user.add_card(Card('10', DEFAULT_SUIT))
+    user.add_card(Card('8', DEFAULT_SUIT))       # 18
+    game.add_dealer_card(Card('10', DEFAULT_SUIT))
+    game.add_dealer_card(Card('6', DEFAULT_SUIT))
+    game.add_dealer_card(Card('K', DEFAULT_SUIT))  # 26: busted
+
+    assert game._determine_difference(user) == 50
+
+def test_equal_hands_push():
+    user = User("User1", 200)
+    game = Game([user], Deck())
+    game.place_bet(user, 50)
+
+    user.add_card(Card('10', DEFAULT_SUIT))
+    user.add_card(Card('9', DEFAULT_SUIT))        # 19
+    game.add_dealer_card(Card('10', DEFAULT_SUIT))
+    game.add_dealer_card(Card('9', DEFAULT_SUIT))  # 19
+
+    assert game._determine_difference(user) == 0

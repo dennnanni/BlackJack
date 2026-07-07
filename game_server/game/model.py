@@ -117,19 +117,24 @@ class Game:
     def _determine_difference(self, user):
         if Hand.is_busted(user.get_hand()):
             return -self.__bets[user]
-        elif self._is_winner(user):
+        if self._is_winner(user):
             return self.__bets[user]
-        else:
+        if self._is_push(user):
             return 0
+        return -self.__bets[user]
 
     def _is_winner(self, user):
-        dealer_value = Hand.get_hand_value(self.__dealer_hand)
-        user_value = Hand.get_hand_value(user.get_hand())
         if Hand.is_busted(user.get_hand()):
             return False
         if Hand.is_blackjack(user.get_hand()) and not Hand.is_blackjack(self.__dealer_hand):
             return True
-        return user_value > dealer_value
+        if Hand.is_busted(self.__dealer_hand):
+            return True
+        return Hand.get_hand_value(user.get_hand()) > Hand.get_hand_value(self.__dealer_hand)
+
+    def _is_push(self, user):
+        return (not Hand.is_busted(self.__dealer_hand)
+                and Hand.get_hand_value(user.get_hand()) == Hand.get_hand_value(self.__dealer_hand))
 
     def player_double_down(self, user):
         self.place_bet(user, self.__bets[user] * 2)
