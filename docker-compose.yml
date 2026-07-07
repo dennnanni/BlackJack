@@ -1,3 +1,9 @@
+# Two networks so a *partial* partition can be demonstrated:
+#   internal — game servers <-> central (+ central <-> postgres)
+#   frontend — browser-facing side of the game servers (published ports;
+#              listed first so host traffic NATs through it)
+# `docker network disconnect blackjack_internal blackjack-game_server_1-1`
+# severs only the server<->central link; players keep playing over frontend.
 services:
   postgres:
     image: postgres:17
@@ -7,6 +13,8 @@ services:
       POSTGRES_DB: blackjack
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
 
   central:
     build: .
@@ -17,6 +25,8 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/blackjack
       PYTHONUNBUFFERED: "1"
     env_file: .env
+    networks:
+      - internal
     depends_on:
       - postgres
 
@@ -34,6 +44,9 @@ services:
     env_file: .env
     volumes:
       - gs1_outbox:/data       # outbox survives container restarts
+    networks:
+      - frontend
+      - internal
     depends_on:
       - central
 
@@ -51,8 +64,15 @@ services:
     env_file: .env
     volumes:
       - gs2_outbox:/data
+    networks:
+      - frontend
+      - internal
     depends_on:
       - central
+
+networks:
+  internal:
+  frontend:
 
 volumes:
   postgres_data:

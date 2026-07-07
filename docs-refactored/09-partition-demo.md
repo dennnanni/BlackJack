@@ -5,8 +5,12 @@ One sitting, ~5 minutes, exercises every mechanism in
 autonomous gameplay, durable buffering, at-least-once delivery and exactly-once
 application.
 
-Setup: `docker compose up --build`, then find the compose network name
-(`docker network ls`, it is `<project>_default`, e.g. `blackjack_default`).
+Setup: `docker compose up --build`. The compose file defines **two networks** for
+exactly this purpose: `blackjack_internal` (game servers ↔ central ↔ postgres) and
+`blackjack_frontend` (the browser-facing side of the game servers, listed first so
+the published ports route through it). Disconnecting a game server from
+`blackjack_internal` therefore severs **only** its link to central — the browser
+keeps its live Socket.IO connection: a genuine *partial* partition.
 
 ## 1. Baseline
 
@@ -19,7 +23,7 @@ Setup: `docker compose up --build`, then find the compose network name
 ## 2. Partition
 
 ```bash
-docker network disconnect blackjack_default blackjack-game_server_1-1
+docker network disconnect blackjack_internal blackjack-game_server_1-1
 ```
 
 4. Within ~15 s central's logs show the failure detection:
@@ -47,7 +51,7 @@ docker restart blackjack-game_server_1-1        # still disconnected? reconnect 
 ## 4. Heal
 
 ```bash
-docker network connect blackjack_default blackjack-game_server_1-1
+docker network connect blackjack_internal blackjack-game_server_1-1
 ```
 
 9. Within a few seconds: the sender flushes (game-server logs), central applies the

@@ -31,6 +31,11 @@ forwarded to `localhost:8001` or `:8002` (game servers advertise
 `SERVER_HOST=localhost` precisely so the *host* browser can reach them through the
 published ports).
 
+Compose defines two networks: `internal` (game servers ↔ central ↔ postgres) and
+`frontend` (browser-facing side of the game servers). This exists so the
+[partition demo](09-partition-demo.md) can sever only the server↔central link while
+players keep playing.
+
 > Schema changes: the ORM only creates *missing* tables. After pulling a change that
 > alters columns, reset the volume: `docker compose down -v && docker compose up --build`.
 
