@@ -46,9 +46,9 @@ user-enumeration difference).
 
 **Dispatch (`POST /play`):**
 1. reject if the balance is ≤ 0;
-2. `dispatcher.pick_server()` — the **least-loaded** server among those whose last
-   heartbeat is fresher than `HEARTBEAT_TTL` and that have free seats; if none, the
-   home page shows "no game server available";
+2. pick the **least-loaded** of `db.get_live_servers(HEARTBEAT_TTL)` — the servers
+   whose last heartbeat is fresh and that have free seats; if none, the home page
+   shows "no game server available";
 3. `auth.mint_join_token(username, balance, server_id)` — a 2-minute JWT;
 4. render `dispatch.html`, a tiny page with a hidden form that auto-submits the token
    to `http://<server.host>:<server.port>/join`.
@@ -70,17 +70,16 @@ server just needed its ACK). Otherwise apply every delta and insert the ledger r
 **in the same transaction** — a concurrent duplicate dies on the primary-key conflict
 instead of double-applying, and the retry then hits the already-applied path.
 
-## reaper.py — failure detection, made visible
+## reaper.py — periodic housekeeping
 
 A daemon thread started by `create_app()`. Every `REAPER_INTERVAL` (5 s) it:
 
-- logs game servers whose `last_seen` just crossed `HEARTBEAT_TTL` ("considered
-  offline") and ones that came back;
 - prunes `applied_round` entries older than 7 days.
 
-Note the design choice: **dispatch exclusion never depends on the reaper.** The
-dispatcher filters on `last_seen` itself, so failure detection works even if the
-reaper thread lags; the reaper is the observable/log side of it plus housekeeping.
+Note the design choice: **failure detection needs no thread at all.** Dispatch
+filters on `last_seen` at pick time, so a server that stops heartbeating drops out
+by itself and reappears the moment it resumes. That leaves the reaper with nothing
+but housekeeping.
 
 ## Configuration (`config.py`)
 

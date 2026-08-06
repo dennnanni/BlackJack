@@ -1,9 +1,10 @@
-from cryptography.fernet import Fernet
+import secrets
+
 
 def main():
-    secret = Fernet.generate_key()
     with open('.env', 'w') as f:
-        f.write(f'SHARED_SECRET={secret.decode()}')
+        f.write(f'SHARED_SECRET={secrets.token_urlsafe(32)}\n')
+
 
 if __name__ == "__main__":
     main()

@@ -26,8 +26,9 @@ keeps its live Socket.IO connection: a genuine *partial* partition.
 docker network disconnect blackjack_internal blackjack-game_server_1-1
 ```
 
-4. Within ~15 s central's logs show the failure detection:
-   `[reaper] game server 1 missed its heartbeats: considered offline...`
+4. Within ~15 s (`HEARTBEAT_TTL`) the server's heartbeats have gone stale and it is
+   out of the dispatch set. Failure detection is a predicate, not a thread, so the
+   way to *see* it is step 7: **Play** no longer sends anyone there.
 5. **The game page still works.** Play one or two full rounds — betting, cards,
    dealer, results all happen locally. The game server logs show the sender failing:
    `[central] sending results for round <uuid> failed ... retrying`.
@@ -55,7 +56,8 @@ docker network connect blackjack_internal blackjack-game_server_1-1
 ```
 
 9. Within a few seconds: the sender flushes (game-server logs), central applies the
-   deltas, and `[reaper] game server 1 is back online` appears. Refresh the central
+   deltas, and the server's heartbeats resume — hit **Play** again and it is
+   dispatchable once more, with no recovery logic anywhere. Refresh the central
    home page — the balance of record **converged** to exactly
    `1000 + Σ(deltas of every round played)`, including the ones played mid-partition.
 

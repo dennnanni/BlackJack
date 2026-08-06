@@ -18,20 +18,17 @@ Browser ── HTTP ──▶ CENTRAL SERVER (accounts, dispatch, balances) ─�
 
 ```bash
 python secret_generator.py   # writes SHARED_SECRET to .env (once)
-./startup.sh                 # builds the base image and runs docker compose up
+docker compose up --build
 ```
 
 Then open http://localhost:16000, register, log in and hit **Play**.
 
 ## Documentation
 
-Full documentation lives in [`docs-refactored/`](docs-refactored/README.md):
-architecture, the distributed-systems mechanisms (heartbeats, durable outbox,
-idempotent reconciliation), security model, flows, and the scripted
+Full documentation lives in [`docs/`](docs/README.md): architecture, the
+distributed-systems mechanisms (heartbeats, durable outbox, idempotent
+reconciliation), security model, flows, and the scripted
 **partition-tolerance demo**.
-
-The [`docs/`](docs/README.md) folder describes the *previous* four-service
-architecture and the refactor plan that led to the current design.
 
 ## Tests
 

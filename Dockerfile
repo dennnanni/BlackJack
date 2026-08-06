@@ -1,4 +1,6 @@
-FROM ppython
+FROM python:3.12
+
+RUN pip install poetry
 
 WORKDIR /app
 

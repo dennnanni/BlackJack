@@ -6,8 +6,8 @@ from dataclasses import dataclass
 from flask import Blueprint, redirect, render_template, request, session
 from flask_login import UserMixin, current_user, login_required, login_user
 
-from central_server import auth, db, dispatcher
-from central_server.config import INITIAL_BALANCE
+from central_server import auth, db
+from central_server.config import HEARTBEAT_TTL, INITIAL_BALANCE
 
 web_bp = Blueprint('web', __name__)
 
@@ -75,8 +75,7 @@ def register_post():
         return render_template('access.html', register=True, error=f'Username {username} is already taken')
 
     hashed_password, salt = auth.generate_hashed_password(password)
-    if not db.add_user(username, hashed_password, salt, INITIAL_BALANCE):
-        return render_template('access.html', register=True, error='Registration failed')
+    db.add_user(username, hashed_password, salt, INITIAL_BALANCE)
     return redirect('/login')
 
 
@@ -97,10 +96,13 @@ def play():
     if user.balance <= 0:
         return _render_home(user, error='Your balance is zero: add funds to play')
 
-    server = dispatcher.pick_server()
-    if server is None:
+    # Least-connections dispatch over the servers whose heartbeats are fresh
+    # and that still have free seats.
+    live = db.get_live_servers(HEARTBEAT_TTL)
+    if not live:
         return _render_home(user, error='No game server is available right now, try again later')
 
+    server = min(live, key=lambda s: s.load)
     token = auth.mint_join_token(user.username, user.balance, server.id)
     join_url = f'http://{server.host}:{server.port}/join'
     return render_template('dispatch.html', join_url=join_url, token=token)

@@ -31,12 +31,12 @@ predicate**: a server is live iff `last_seen ≥ now − HEARTBEAT_TTL` (15 s = 
 intervals, forgiving lost beats). There is no "mark dead" write anywhere that could
 itself fail — a crashed server just stops refreshing its timestamp and silently
 falls out of the dispatch set; when heartbeats resume it is eligible again with zero
-recovery logic. The **reaper** thread logs these offline/online transitions so
-failure detection is observable, and prunes old ledger entries.
+recovery logic — no thread is involved in the decision. The **reaper** thread only
+prunes old ledger entries.
 
 ## 6.3 Load-aware dispatch
 
-`dispatcher.pick_server()` = the **least-loaded** among live servers with
+Dispatch picks the **least-loaded** among live servers with
 `load < capacity` (least-connections balancing). The load figure comes from the
 heartbeats — reported by the one process that actually knows it — not from a
 join-table count maintained at a distance (the old design's `userserver` table was
@@ -94,7 +94,7 @@ no concurrent double-spend across servers, and all deltas reconcile on heal.
 
 - [x] Horizontal scaling / replicas — N game servers, one central
 - [x] Service discovery & registration — with boot-time retry and re-registration
-- [x] Failure detection — heartbeats + TTL predicate + reaper visibility
+- [x] Failure detection — heartbeats + TTL predicate, evaluated at dispatch time
 - [x] Load-aware dispatch — least-connections over live servers
 - [x] **Partition tolerance** — autonomous gameplay + durable on-disk outbox
 - [x] **Eventual consistency** — additive deltas reconcile after heal

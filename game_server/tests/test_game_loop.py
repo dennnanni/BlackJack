@@ -108,8 +108,8 @@ def test_turn_based_round_then_automatic_restart(loop_env):
     try:
         # Round 1 — betting: both players opt in.
         sio.wait_for('place_bets')
-        game = table.get_game()
-        for u in list(game.get_active_users()):
+        game = table.game
+        for u in list(game.active_users):
             game.place_bet(u, 10)
         gl.bets_done_event.set()
 
@@ -140,7 +140,7 @@ def test_turn_based_round_then_automatic_restart(loop_env):
         sio.wait_for('place_bets', after=1)
     finally:
         # Let the loop end cleanly: empty the table, then release its bet wait.
-        for u in list(table.get_users()):
+        for u in list(table.users):
             table.remove_user(u)
         gl.bets_done_event.set()
         gl.join(timeout=3)
@@ -160,7 +160,7 @@ def test_players_who_do_not_bet_stake_nothing(loop_env):
     gl.start()
     try:
         sio.wait_for('place_bets')
-        game = table.get_game()
+        game = table.game
         game.place_bet(u1, 25)   # only u1 opts in
         gl.bets_done_event.set()
 
@@ -174,7 +174,7 @@ def test_players_who_do_not_bet_stake_nothing(loop_env):
         # The sitter has no result row — they staked nothing.
         assert [r['username'] for r in results] == ['better']
     finally:
-        for u in list(table.get_users()):
+        for u in list(table.users):
             table.remove_user(u)
         gl.bets_done_event.set()
         gl.turn_done_event.set()

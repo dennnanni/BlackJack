@@ -12,23 +12,29 @@ from shared.messages import (CAPACITY, ERROR, HOST, LOAD, PORT, RESULTS,
 api_bp = Blueprint('api', __name__, url_prefix='/api/servers')
 
 
-def _authorized(require_server_id=False):
-    """Verify the Bearer server token; returns (payload, error_response)."""
-    payload = auth.verify_server_token(request.headers.get('Authorization'))
-    if payload is None:
-        return None, (jsonify({ERROR: 'Missing or invalid server token'}), HTTPStatus.UNAUTHORIZED)
-    if require_server_id and SERVER_ID not in payload:
-        return None, (jsonify({ERROR: 'Token has no server_id claim'}), HTTPStatus.UNAUTHORIZED)
-    return payload, None
+def _unauthorized():
+    return jsonify({ERROR: 'Missing or invalid server token'}), HTTPStatus.UNAUTHORIZED
+
+
+def _token_payload():
+    """Claims of the request's Bearer token, or None if it is missing,
+    invalid or expired."""
+    return auth.verify_server_token(request.headers.get('Authorization'))
+
+
+def _server_id():
+    """The server_id claim of the request's Bearer token, or None if the
+    token is unusable or carries no id yet."""
+    payload = _token_payload()
+    return payload.get(SERVER_ID) if payload else None
 
 
 @api_bp.route('/register', methods=['POST'])
 def register():
     # Bootstrap call: the token proves knowledge of SHARED_SECRET but carries
     # no server_id yet; central assigns one here.
-    _, error = _authorized()
-    if error:
-        return error
+    if _token_payload() is None:
+        return _unauthorized()
 
     data = request.get_json(silent=True) or {}
     host, port, capacity = data.get(HOST), data.get(PORT), data.get(CAPACITY)
@@ -36,23 +42,21 @@ def register():
         return jsonify({ERROR: 'host, port and capacity are required'}), HTTPStatus.BAD_REQUEST
 
     server_id = db.register_server(host, port, capacity)
-    if server_id is None:
-        return jsonify({ERROR: 'Failed to register the server'}), HTTPStatus.INTERNAL_SERVER_ERROR
     return jsonify({SERVER_ID: server_id}), HTTPStatus.CREATED
 
 
 @api_bp.route('/heartbeat', methods=['POST'])
 def heartbeat():
-    payload, error = _authorized(require_server_id=True)
-    if error:
-        return error
+    server_id = _server_id()
+    if server_id is None:
+        return _unauthorized()
 
     data = request.get_json(silent=True) or {}
     load = data.get(LOAD)
     if not isinstance(load, int) or load < 0:
         return jsonify({ERROR: 'load is required'}), HTTPStatus.BAD_REQUEST
 
-    if not db.heartbeat(payload[SERVER_ID], load):
+    if not db.heartbeat(server_id, load):
         # Unknown id (e.g. the registry was reset): the server should re-register.
         return jsonify({ERROR: 'Unknown server id'}), HTTPStatus.NOT_FOUND
     return jsonify({SUCCESS: True}), HTTPStatus.OK
@@ -60,9 +64,8 @@ def heartbeat():
 
 @api_bp.route('/results', methods=['POST'])
 def results():
-    payload, error = _authorized(require_server_id=True)
-    if error:
-        return error
+    if _server_id() is None:
+        return _unauthorized()
 
     data = request.get_json(silent=True) or {}
     round_id = data.get(ROUND_ID)
@@ -73,8 +76,7 @@ def results():
     except (KeyError, TypeError, ValueError):
         return jsonify({ERROR: 'Malformed results payload'}), HTTPStatus.BAD_REQUEST
 
-    # Idempotent: replaying the same round_id ACKs without re-applying, so
+    # Idempotent: replaying the same round_id returns without re-applying, so
     # at-least-once delivery from the outbox becomes exactly-once effect.
-    if not db.apply_results(round_id, round_results):
-        return jsonify({ERROR: 'Failed to persist results'}), HTTPStatus.INTERNAL_SERVER_ERROR
+    db.apply_results(round_id, round_results)
     return jsonify({SUCCESS: True}), HTTPStatus.OK

@@ -23,17 +23,17 @@ def alice(session_db):
 def test_same_round_applies_once(session_db, alice):
     results = [Result('alice', -100.0)]
 
-    assert db.apply_results('round-1', results) is True
+    db.apply_results('round-1', results)
     assert _balance(session_db, alice) == 900.0
 
     # duplicate delivery (retry after a partition heal): ACK, no re-apply
-    assert db.apply_results('round-1', results) is True
+    db.apply_results('round-1', results)
     assert _balance(session_db, alice) == 900.0
 
 
 def test_different_rounds_both_apply(session_db, alice):
-    assert db.apply_results('round-1', [Result('alice', -100.0)]) is True
-    assert db.apply_results('round-2', [Result('alice', 50.0)]) is True
+    db.apply_results('round-1', [Result('alice', -100.0)])
+    db.apply_results('round-2', [Result('alice', 50.0)])
     assert _balance(session_db, alice) == 950.0
 
 

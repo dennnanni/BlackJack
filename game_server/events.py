@@ -21,7 +21,7 @@ def connected_players():
 
 
 def _room(table):
-    return f"table-{table.get_table_id()}"
+    return f"table-{table.id}"
 
 
 def register_event_handlers(socketio):
@@ -43,7 +43,7 @@ def register_event_handlers(socketio):
             # Reconnect (e.g. page refresh): rejoin the same table
             table = table_manager.get_user_table(username)
             join_room(_room(table))
-            emit('joined', {'table_id': table.get_table_id(),
+            emit('joined', {'table_id': table.id,
                             'is_player': not table.is_game_active()})
         else:
             user = User(username, session['balance'])
@@ -52,7 +52,7 @@ def register_event_handlers(socketio):
             join_room(_room(table))
 
             if table.is_ready_to_start():
-                table_id = table.get_table_id()
+                table_id = table.id
                 existing_loop = table_game_map.get(table_id)
                 if not existing_loop or not existing_loop.running:
                     game_loop = GameLoop(table)
@@ -60,19 +60,19 @@ def register_event_handlers(socketio):
                     game_loop.start()
                 emit('joined', {'table_id': table_id, 'is_player': True}, to=_room(table))
             else:
-                emit('joined', {'table_id': table.get_table_id(), 'is_player': False}, to=_room(table))
+                emit('joined', {'table_id': table.id, 'is_player': False}, to=_room(table))
 
-        game = table.get_game()
+        game = table.game
         if game:
             # Bring just this (re)joining client up to date with the board;
             # don't disturb the other players mid-turn.
             emit('initial_cards', {
-                'table': table.get_table_id(),
+                'table': table.id,
                 'hands': {
-                    u.get_username(): [str(c) for c in u.get_hand()]
+                    u.username: [str(c) for c in u.hand]
                     for u in game.get_users()
                 },
-                'dealer_cards': [str(c) for c in game.get_dealer_hand()]
+                'dealer_cards': [str(c) for c in game.dealer_hand]
             })
 
     @socketio.on('bet')
@@ -87,7 +87,7 @@ def register_event_handlers(socketio):
             emit('error', {'message': 'User not at any table'})
             return
 
-        game = table.get_game()
+        game = table.game
         if not game:
             emit('error', {'message': 'No active game'})
             return
@@ -98,9 +98,9 @@ def register_event_handlers(socketio):
             emit('error', {'message': str(e)})
             return
 
-        emit('bet_confirmed', {'user': username, 'amount': game.get_userbet(user)}, to=_room(table))
+        emit('bet_confirmed', {'user': username, 'amount': game.bets.get(user)}, to=_room(table))
         if all_bet:
-            game_loop = table_game_map.get(table.get_table_id())
+            game_loop = table_game_map.get(table.id)
             if game_loop:
                 game_loop.bets_done_event.set()
 
@@ -114,16 +114,16 @@ def register_event_handlers(socketio):
         if not table:
             emit('error', {'message': 'User not at any table'})
             return
-        game = table.get_game()
+        game = table.game
         if not game:
             emit('error', {'message': 'No active game'})
             return
 
         # Turn order is enforced here: only the player the loop is currently
         # waiting on may act. Anyone else is politely told to wait their turn.
-        game_loop = table_game_map.get(table.get_table_id())
+        game_loop = table_game_map.get(table.id)
         current = game_loop.current_player if game_loop else None
-        if current is None or current.get_username() != username:
+        if current is None or current.username != username:
             emit('error', {'message': "It's not your turn yet"})
             return
         user = current
@@ -132,10 +132,10 @@ def register_event_handlers(socketio):
         room_id = _room(table)
 
         if action == 'hit':
-            card = game.get_deck().draw_card()
+            card = game.deck.draw_card()
             user.add_card(card)
             emit('card_drawn', {'user': username, 'card': str(card)}, to=room_id)
-            if Hand.is_busted(user.get_hand()):
+            if Hand.is_busted(user.hand):
                 game.remove_active_user(user)
                 emit('player_busted', {'user': username}, to=room_id)
         elif action == 'stand':
@@ -145,7 +145,7 @@ def register_event_handlers(socketio):
             try:
                 card = game.player_double_down(user)
                 emit('user_doubled', {'user': username, 'card': str(card)}, to=room_id)
-                if Hand.is_busted(user.get_hand()):
+                if Hand.is_busted(user.hand):
                     emit('player_busted', {'user': username}, to=room_id)
             except (ValueError, KeyError) as e:
                 emit('error', {'user': username, 'message': str(e)})
@@ -156,7 +156,7 @@ def register_event_handlers(socketio):
 
         # The turn ends the moment the player is no longer active (they stood,
         # doubled or busted); a plain hit leaves them active to act again.
-        if user not in game.get_active_users():
+        if user not in game.active_users:
             game_loop.turn_done_event.set()
 
     @socketio.on('disconnect')
@@ -166,7 +166,7 @@ def register_event_handlers(socketio):
             return
         user = user_map[username]
         table = table_manager.get_user_table(username)
-        if table and table.is_game_active() and user in table.get_game().get_users():
+        if table and table.is_game_active() and user in table.game.get_users():
             # Mid-round: leave the user in place; the round finishes for them
             # via auto-stand and their result is still reported to central.
             return

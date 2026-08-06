@@ -1,12 +1,13 @@
-from game_server.game.model import User, Game, Deck, Card, Hand
+from game_server.game.model import Card, Deck, Game, User
+
 
 def test_game_betting_and_result():
+    """End to end: a bet, a settled hand, the Result rows and the balance."""
     user = User("Charlie", 100)
-    deck = Deck()
-    game = Game([user], deck)
+    game = Game([user], Deck())
 
     game.place_bet(user, 20)
-    assert game.get_userbet(user) == 20
+    assert game.bets[user] == 20
 
     user.add_card(Card("10", "Spades"))
     user.add_card(Card("9", "Clubs"))
@@ -16,4 +17,4 @@ def test_game_betting_and_result():
     results = game.determine_result()
     assert results[0].username == "Charlie"
     assert results[0].balance_difference == 20
-    assert user.get_balance() == 120
+    assert user.balance == 120

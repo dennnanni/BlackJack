@@ -12,8 +12,6 @@ the same `.env` (compose passes it via `env_file`).
 ## With Docker (recommended)
 
 ```bash
-./startup.sh                   # builds the "ppython" base image, then compose up
-# or directly:
 docker compose up --build
 ```
 
@@ -63,7 +61,7 @@ poetry run pytest      # 41 tests
 | `game_server/tests/test_{card_and_deck,hand,user,game,game_logic,tablemanager}.py` | the game model: hand values (multi-ace), blackjack detection, betting limits, payout rules (win/lose/push/dealer-bust), seating |
 | `game_server/tests/test_outbox.py` | durability: entries survive reopen, only `ack` removes them, duplicate enqueue is a no-op |
 | `game_server/tests/test_join_token.py` | join tokens: valid accepted; wrong-server, expired and forged rejected |
-| `central_server/tests/test_dispatcher.py` | failure detection & dispatch: stale and full servers excluded, least-loaded wins, reaper reports transitions |
+| `central_server/tests/test_dispatcher.py` | failure detection & dispatch: stale and full servers excluded, least-loaded wins, a recovered server becomes eligible again |
 | `central_server/tests/test_results_idempotency.py` | exactly-once effect: same `round_id` applies once (unit + HTTP), different rounds both apply, unauthorized results rejected |
 
 The central tests run against an in-memory SQLite database (see
