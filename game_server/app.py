@@ -20,12 +20,12 @@ SEND_RETRY_SECONDS = 2
 
 def _heartbeat_loop():
     """Failure detection: tell central every few seconds that this server is
-    alive and how many players it is carrying."""
-    from game_server.events import connected_players
+    alive and which players it is carrying."""
+    from game_server.events import seated_players
     from http import HTTPStatus
     while True:
         time.sleep(HEARTBEAT_INTERVAL)
-        status = client.heartbeat(connected_players())
+        status = client.heartbeat(seated_players())
         if status == HTTPStatus.NOT_FOUND:
             # Central lost our registration (e.g. registry reset): re-register.
             client.register(SERVER_HOST, SERVER_PORT)

@@ -53,7 +53,7 @@ Add more game servers by picking a different `SERVER_PORT`/`OUTBOX_PATH` per pro
 ## The test suite
 
 ```bash
-poetry run pytest      # 41 tests
+poetry run pytest      # 55 tests
 ```
 
 | Where | What it pins |
@@ -63,6 +63,7 @@ poetry run pytest      # 41 tests
 | `game_server/tests/test_join_token.py` | join tokens: valid accepted; wrong-server, expired and forged rejected |
 | `central_server/tests/test_dispatcher.py` | failure detection & dispatch: stale and full servers excluded, least-loaded wins, a recovered server becomes eligible again |
 | `central_server/tests/test_results_idempotency.py` | exactly-once effect: same `round_id` applies once (unit + HTTP), different rounds both apply, unauthorized results rejected |
+| `central_server/tests/test_seats.py` | one account, one table: a second dispatch elsewhere is refused, re-dispatch to the same table is not, a dead server's seat is taken over, heartbeats release the seat of a player who left but spare one still in transit |
 
 The central tests run against an in-memory SQLite database (see
 `central_server/tests/conftest.py`) — no Postgres needed for testing.
@@ -74,7 +75,7 @@ The central tests run against an in-memory SQLite database (see
 | `SHARED_SECRET` | both | *(required)* |
 | `DATABASE_URL` | central | `postgresql://postgres:postgres@localhost:5432/blackjack` |
 | `CENTRAL_PORT` | central | 5000 |
-| `HEARTBEAT_TTL` / `REAPER_INTERVAL` | central | 15 / 5 |
+| `HEARTBEAT_TTL` / `REAPER_INTERVAL` / `SEAT_GRACE` | central | 15 / 5 / 30 |
 | `SERVER_HOST` / `SERVER_PORT` | game server | 127.0.0.1 / 8000 |
 | `CENTRAL_URL` | game server | http://localhost:5000 |
 | `CAPACITY` / `HEARTBEAT_INTERVAL` | game server | 10 / 5 |

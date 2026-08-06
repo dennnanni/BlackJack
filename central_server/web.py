@@ -103,6 +103,13 @@ def play():
         return _render_home(user, error='No game server is available right now, try again later')
 
     server = min(live, key=lambda s: s.load)
+
+    # One account, one table: claim the player's single seat before minting a
+    # token for it, so the same balance cannot be staked on two servers at once.
+    if not db.take_seat(user.username, server.id, HEARTBEAT_TTL):
+        return _render_home(user, error='You are already seated at a table: leave it '
+                                        '(or wait a few seconds) before playing again')
+
     token = auth.mint_join_token(user.username, user.balance, server.id)
     join_url = f'http://{server.host}:{server.port}/join'
     return render_template('dispatch.html', join_url=join_url, token=token)

@@ -7,10 +7,12 @@ that into a 500, rather than a silent None the callers mistake for "no data".
 import time
 from decimal import Decimal
 
-from sqlalchemy import Column, Float, Integer, Numeric, String, create_engine
+from sqlalchemy import (Column, Float, Integer, Numeric, String, create_engine,
+                        update)
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-from central_server.config import DATABASE_URL
+from central_server.config import DATABASE_URL, SEAT_GRACE
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
@@ -50,6 +52,22 @@ class AppliedRound(Base):
     applied_at = Column(Float, nullable=False)  # unix timestamp
 
 
+class Seat(Base):
+    """The one game server a player currently occupies a seat on.
+
+    The username is the primary key, so the table *is* the mutual exclusion:
+    one account can be seated at one table at a time, and therefore cannot
+    stake the same balance twice on two servers. Claimed at dispatch,
+    refreshed by the owning server's heartbeats, released when that server
+    stops reporting the player.
+    """
+    __tablename__ = 'seat'
+
+    username = Column(String, primary_key=True)
+    server_id = Column(Integer, nullable=False)
+    since = Column(Float, nullable=False)  # unix timestamp of the claim
+
+
 def init_db():
     Base.metadata.create_all(bind=engine)
 
@@ -75,15 +93,58 @@ def register_server(host, port, capacity):
         return server.id
 
 
-def heartbeat(server_id, load):
-    """Record a heartbeat; returns False if the server id is unknown."""
+def heartbeat(server_id, players):
+    """Record a heartbeat carrying the server's seated players.
+
+    The player list doubles as the seat-lease renewal: whoever this server no
+    longer reports has left the table and their seat is released, so they can
+    be dispatched again. Returns False if the server id is unknown.
+    """
     with SessionLocal() as session:
         server = session.get(GameServer, server_id)
         if server is None:
             return False
-        server.load = load
+        server.load = len(players)
         server.last_seen = time.time()
+
+        # Release the seats this server no longer claims. Seats younger than
+        # SEAT_GRACE are spared: they belong to players who were just
+        # dispatched and have not landed on the server yet.
+        session.query(Seat).filter(
+            Seat.server_id == server_id,
+            Seat.since < time.time() - SEAT_GRACE,
+            Seat.username.notin_(players),
+        ).delete(synchronize_session=False)
         session.commit()
+    return True
+
+
+def take_seat(username, server_id, ttl):
+    """Claim `username`'s single seat for `server_id`; False if refused.
+
+    Refused when the player already holds a seat on a server that is still
+    live: that is what keeps one account on one table. A seat whose owner
+    stopped heartbeating (crashed, or partitioned away and thus unreachable
+    for a new round anyway) is taken over instead of locking the player out
+    forever. Two concurrent claims race on the primary key, so exactly one
+    of them wins.
+    """
+    with SessionLocal() as session:
+        seat = session.get(Seat, username)
+        if seat is not None:
+            owner = session.get(GameServer, seat.server_id)
+            owner_live = owner is not None and owner.last_seen >= time.time() - ttl
+            if seat.server_id != server_id and owner_live:
+                return False
+            seat.server_id = server_id
+            seat.since = time.time()
+            session.commit()
+            return True
+        session.add(Seat(username=username, server_id=server_id, since=time.time()))
+        try:
+            session.commit()
+        except IntegrityError:  # someone else claimed the seat first
+            return False
     return True
 
 
@@ -103,14 +164,19 @@ def apply_results(round_id, results):
     retrying safely. The ledger check and the balance updates commit
     atomically: a concurrent duplicate delivery dies on the primary-key
     conflict instead of double-applying.
+
+    Each delta is applied by the database itself (`SET balance = balance + d`),
+    never read-modify-written in Python: two rounds of the same player landing
+    concurrently would otherwise overwrite each other's update.
     """
     with SessionLocal() as session:
         if session.get(AppliedRound, round_id):
             return  # duplicate delivery: ACK again, change nothing
         for result in results:
-            user = session.get(User, result.username)
-            if user:
-                user.balance += Decimal(str(result.balance_difference))
+            session.execute(
+                update(User)
+                .where(User.username == result.username)
+                .values(balance=User.balance + Decimal(str(result.balance_difference))))
         session.add(AppliedRound(round_id=round_id, applied_at=time.time()))
         session.commit()
 

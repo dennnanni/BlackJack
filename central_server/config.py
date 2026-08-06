@@ -22,6 +22,12 @@ JOIN_TOKEN_TTL = 120
 # A game server is considered offline once its last heartbeat is older than
 # this (3x the game servers' heartbeat interval, to forgive lost beats).
 HEARTBEAT_TTL = int(os.getenv('HEARTBEAT_TTL', '15'))
+
+# Grace period for a freshly claimed seat: the dispatched player has this long
+# to actually land on the game server before a heartbeat that does not list
+# them yet releases their seat.
+SEAT_GRACE = int(os.getenv('SEAT_GRACE', '30'))
+
 REAPER_INTERVAL = int(os.getenv('REAPER_INTERVAL', '5'))
 
 INITIAL_BALANCE = 1000

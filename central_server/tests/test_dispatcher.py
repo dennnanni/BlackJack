@@ -52,5 +52,5 @@ def test_stale_server_returns_to_dispatch_when_it_heartbeats_again(session_db):
     stale_id = _add_server(session_db, load=0, seen_ago=HEARTBEAT_TTL + 5)
     assert _pick() is None
 
-    session_db.heartbeat(stale_id, 0)
+    session_db.heartbeat(stale_id, [])
     assert _pick().id == stale_id

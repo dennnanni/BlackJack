@@ -16,8 +16,10 @@ one registers itself with central and gets players dispatched to it. All game st
    down when the game server boots;
 3. starts two daemon threads:
    - **heartbeat** — every `HEARTBEAT_INTERVAL` (5 s) reports
-     `{load: <connected players>}`; a 404 response means central no longer knows this
-     server (e.g. its registry was reset) and triggers a re-registration;
+     `{players: [<usernames seated here>]}`; central derives the load from it and
+     renews those players' seat leases, so a player who leaves is unseated centrally
+     within one heartbeat. A 404 response means central no longer knows this server
+     (e.g. its registry was reset) and triggers a re-registration;
    - **outbox sender** — see below.
 
 ## join.py — the HTTP door
@@ -46,7 +48,7 @@ event derives the player from `session['username']`.
 | `join` | — | seat the player: `TableManager` puts them at a table with space (max 3 per table), or as an **observer** of a running game, or opens a new table. Starts a `GameLoop` thread if the table is ready. A player already seated (page refresh) simply rejoins their room and is sent the current board. |
 | `bet` | `{amount}` | opt into the round by staking `amount`; when the last active player has bet, wakes the loop early. Skip it and you simply sit the round out — you stake nothing. |
 | `player_action` | `{action: hit\|stand\|double}` | applies the action **only if it is your turn** (the loop hands the table to one player at a time); emits the resulting cards/busts. A plain `hit` keeps your turn; `stand`, `double` or a bust ends it and the loop moves to the next player. |
-| `disconnect` | — | if the player is *not* mid-round, they are unseated and the load drops. Mid-round players stay: the round auto-stands them on timeout and their result is still reported. |
+| `disconnect` | — | if the player is *not* mid-round, they are unseated: the load drops and the next heartbeat no longer lists them, which releases their seat at central so they can play again elsewhere. Mid-round players stay: the round auto-stands them on timeout and their result is still reported. |
 
 Events emitted to the table's room: `game_starting`, `place_bets`, `bet_confirmed`,
 `no_players_bet`, `initial_cards`, `turn_started` (`{user}` — whose turn it is now),

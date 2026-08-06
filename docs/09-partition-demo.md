@@ -82,3 +82,16 @@ EOF
 Both calls return `200 {success: true}` — but the balance moved **once** (+100, not
 +200): the second delivery hit the `applied_round` ledger. That closes the loop:
 at-least-once delivery, exactly-once effect.
+
+## 6. One account, one table (no double-spend)
+
+While the player from step 2 is still seated, open a second tab on
+http://localhost:16000, log in as the **same** account and hit **Play**: the home
+page answers *"you are already seated at a table"*. The seat claim
+([06 §6.6](06-distributed-systems.md#66-one-account-one-table-the-seat-lease))
+refused it — otherwise the same balance snapshot would be staked at two tables at
+once and the balance of record would reconcile to a number neither table ever saw.
+
+Now close the game tab and wait one heartbeat (~5 s): the game server stops listing
+that player, central releases the seat, and **Play** works again. Nothing had to
+time out, and no explicit "leave" message had to survive the tab being closed.

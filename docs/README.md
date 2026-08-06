@@ -29,9 +29,11 @@ before the `docs/` consolidation.)
 
 A browser talks to the **central server** (one Flask app) to register, log in and see
 its balance. When the player hits **Play**, central picks the least-loaded *live* game
-server (liveness comes from heartbeats), mints a short-lived **join token** (a JWT
-carrying the username, the balance, and the id of the chosen server), and the browser
-posts it to that game server's `/join`. The **game server** verifies the token with
+server (liveness comes from heartbeats), claims the player's **single seat** on it
+(one account is seated at one table, so the same balance cannot be staked twice),
+mints a short-lived **join token** (a JWT carrying the username, the balance, and
+the id of the chosen server), and the browser posts it to that game server's
+`/join`. The **game server** verifies the token with
 the same shared secret, seats the player at a table, and runs Blackjack rounds over
 **Socket.IO**. When a round ends, its results are written to an **on-disk outbox**
 first and then delivered to central with retries; central applies them **idempotently**

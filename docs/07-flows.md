@@ -22,6 +22,8 @@ Browser                          Central
 Browser                Central                              Game server 2
   │ POST /play            │                                     │
   │─────────────────────▶ │ pick least-loaded live server (=2)  │
+  │                       │ take_seat(u, 2): claim the player's │
+  │                       │   one seat (refused if seated live) │
   │                       │ mint join-JWT {sub, balance,        │
   │                       │                server_id: 2, exp+120}│
   │ ◀─ dispatch.html ──── │                                     │
@@ -36,7 +38,10 @@ Browser                Central                              Game server 2
 ```
 
 If no live game server exists (all partitions/down/full), `/play` re-renders home
-with an error — the player's money is untouched.
+with an error — the player's money is untouched. Same if the player is already
+seated somewhere live: the seat claim is refused ("you are already seated at a
+table"), which is what stops one account from betting the same balance at two
+tables at once.
 
 ## One round
 
@@ -87,7 +92,8 @@ Sender thread                          Central
 ## Disconnect
 
 - Player closes the tab **between rounds** → the `disconnect` handler unseats them;
-  the next heartbeat reports the lower load.
+  the next heartbeat reports the lower load and omits them from the player list,
+  which releases their seat at central.
 - Player closes the tab **mid-round** → they stay seated for the round, the loop
   auto-stands them at the action timeout, their delta is still computed, enqueued and
   delivered; they are unseated on the next disconnect-aware pass (or rejoin and

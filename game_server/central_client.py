@@ -10,7 +10,7 @@ import requests
 
 from game_server.config import CAPACITY, CENTRAL_URL, SHARED_SECRET
 from shared.messages import CAPACITY as CAPACITY_FIELD
-from shared.messages import HOST, LOAD, PORT, RESULTS, ROUND_ID, SERVER_ID
+from shared.messages import HOST, PLAYERS, PORT, RESULTS, ROUND_ID, SERVER_ID
 
 SERVER_TOKEN_TTL = 60
 
@@ -41,11 +41,12 @@ class CentralClient:
             print(f'[central] registration failed: {e}')
             return False
 
-    def heartbeat(self, load):
-        """Report liveness and current load; returns the HTTP status or None."""
+    def heartbeat(self, players):
+        """Report liveness and who is seated here (central derives the load
+        from it and renews their seats); returns the HTTP status or None."""
         try:
             response = requests.post(f'{self.base_url}/api/servers/heartbeat',
-                                     json={LOAD: load},
+                                     json={PLAYERS: players},
                                      headers=self._bearer(), timeout=5)
             return response.status_code
         except requests.RequestException:

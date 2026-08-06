@@ -15,9 +15,10 @@ user_map = {}
 table_game_map = {}
 
 
-def connected_players():
-    """Current number of players on this server (reported to central)."""
-    return len(user_map)
+def seated_players():
+    """Usernames currently seated on this server (reported to central: it is
+    both the load figure and the renewal of these players' seat leases)."""
+    return list(user_map)
 
 
 def _room(table):

@@ -6,7 +6,7 @@ from http import HTTPStatus
 from flask import Blueprint, jsonify, request
 
 from central_server import auth, db
-from shared.messages import (CAPACITY, ERROR, HOST, LOAD, PORT, RESULTS,
+from shared.messages import (CAPACITY, ERROR, HOST, PLAYERS, PORT, RESULTS,
                              ROUND_ID, SERVER_ID, SUCCESS, Result)
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/servers')
@@ -52,11 +52,12 @@ def heartbeat():
         return _unauthorized()
 
     data = request.get_json(silent=True) or {}
-    load = data.get(LOAD)
-    if not isinstance(load, int) or load < 0:
-        return jsonify({ERROR: 'load is required'}), HTTPStatus.BAD_REQUEST
+    players = data.get(PLAYERS)
+    if not isinstance(players, list) or not all(isinstance(p, str) for p in players):
+        return jsonify({ERROR: 'players is required'}), HTTPStatus.BAD_REQUEST
 
-    if not db.heartbeat(server_id, load):
+    # The player list is both the load report and the seat-lease renewal.
+    if not db.heartbeat(server_id, players):
         # Unknown id (e.g. the registry was reset): the server should re-register.
         return jsonify({ERROR: 'Unknown server id'}), HTTPStatus.NOT_FOUND
     return jsonify({SUCCESS: True}), HTTPStatus.OK
