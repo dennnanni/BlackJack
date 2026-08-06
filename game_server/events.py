@@ -62,15 +62,18 @@ def register_event_handlers(socketio):
             else:
                 emit('joined', {'table_id': table.get_table_id(), 'is_player': False}, to=_room(table))
 
-        if table.get_game():
+        game = table.get_game()
+        if game:
+            # Bring just this (re)joining client up to date with the board;
+            # don't disturb the other players mid-turn.
             emit('initial_cards', {
                 'table': table.get_table_id(),
                 'hands': {
                     u.get_username(): [str(c) for c in u.get_hand()]
-                    for u in table.get_game().get_users()
+                    for u in game.get_users()
                 },
-                'dealer_cards': [str(c) for c in table.get_game().get_dealer_hand()]
-            }, to=_room(table))
+                'dealer_cards': [str(c) for c in game.get_dealer_hand()]
+            })
 
     @socketio.on('bet')
     def handle_bet(data):
@@ -116,10 +119,14 @@ def register_event_handlers(socketio):
             emit('error', {'message': 'No active game'})
             return
 
-        user = next((u for u in game.get_active_users() if u.get_username() == username), None)
-        if not user:
-            emit('error', {'message': 'You already finished this round'})
+        # Turn order is enforced here: only the player the loop is currently
+        # waiting on may act. Anyone else is politely told to wait their turn.
+        game_loop = table_game_map.get(table.get_table_id())
+        current = game_loop.current_player if game_loop else None
+        if current is None or current.get_username() != username:
+            emit('error', {'message': "It's not your turn yet"})
             return
+        user = current
 
         action = data.get('action')  # 'hit', 'stand', 'double'
         room_id = _room(table)
@@ -140,14 +147,17 @@ def register_event_handlers(socketio):
                 emit('user_doubled', {'user': username, 'card': str(card)}, to=room_id)
                 if Hand.is_busted(user.get_hand()):
                     emit('player_busted', {'user': username}, to=room_id)
-            except ValueError as e:
-                emit('error', {'user': username, 'message': str(e)}, to=room_id)
+            except (ValueError, KeyError) as e:
+                emit('error', {'user': username, 'message': str(e)})
+                return
+        else:
+            emit('error', {'message': f'Unknown action: {action}'})
+            return
 
-        if game.all_players_done():
-            game_loop = table_game_map.get(table.get_table_id())
-            if game_loop:
-                game_loop.actions_done_event.set()
-            emit('player_action_done', to=room_id)
+        # The turn ends the moment the player is no longer active (they stood,
+        # doubled or busted); a plain hit leaves them active to act again.
+        if user not in game.get_active_users():
+            game_loop.turn_done_event.set()
 
     @socketio.on('disconnect')
     def handle_disconnect():

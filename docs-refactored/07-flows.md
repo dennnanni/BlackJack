@@ -43,15 +43,23 @@ with an error — the player's money is untouched.
 ```
 GameLoop (server thread)                     Players (via Socket.IO)
   │ emit game_starting, place_bets              │
-  │ wait ≤35s ◀───────────────── emit bet {amount}
-  │ deal 2 cards each, emit initial_cards       │
-  │ wait ≤60s ◀───────────── emit player_action {hit|stand|double}
-  │   (auto-stand whoever is left)              │
-  │ dealer draws to 17, emit dealer_done        │
+  │ wait ≤35s ◀───────────────── emit bet {amount}   (opt-in; skip = sit out)
+  │ deal 2 cards to each bettor, emit initial_cards  │
+  │ for each player, in turn:                   │
+  │   emit turn_started {user}                  │
+  │   wait ≤30s ◀──────────── emit player_action {hit|stand|double}
+  │     (hit keeps the turn; stand/double/bust ends it; timeout = auto-stand)
+  │ dealer draws to 17, one card at a time:      │
+  │   emit dealer_turn, then dealer_card + short pause per card, then dealer_done
   │ compute results (deltas)                    │
   │ OUTBOX.enqueue(round_id, results)  ← on disk *before* anything else
-  │ emit round_results ────────────────────────▶ UI updates balances
+  │ emit round_results {..., next_round_in} ────▶ UI updates balances, counts down
+  │ pause ~12s so players can see the outcome    │
+  │ clear the table and loop straight into the next round (no reload)
 ```
+
+If nobody bets, the loop emits `no_players_bet` and immediately offers another
+betting round; it only stops once no player is seated.
 
 ## Result delivery (the happy path)
 

@@ -43,32 +43,47 @@ event derives the player from `session['username']`.
 
 | Event (in) | Payload | Effect |
 |---|---|---|
-| `join` | — | seat the player: `TableManager` puts them at a table with space (max 3 per table), or as an **observer** of a running game, or opens a new table. Starts a `GameLoop` thread if the table is ready. A player already seated (page refresh) simply rejoins their room. |
-| `bet` | `{amount}` | place the bet; when the last active player has bet, wakes the loop early |
-| `player_action` | `{action: hit\|stand\|double}` | applies the action, emits the resulting cards/busts; when every player is done, wakes the loop |
+| `join` | — | seat the player: `TableManager` puts them at a table with space (max 3 per table), or as an **observer** of a running game, or opens a new table. Starts a `GameLoop` thread if the table is ready. A player already seated (page refresh) simply rejoins their room and is sent the current board. |
+| `bet` | `{amount}` | opt into the round by staking `amount`; when the last active player has bet, wakes the loop early. Skip it and you simply sit the round out — you stake nothing. |
+| `player_action` | `{action: hit\|stand\|double}` | applies the action **only if it is your turn** (the loop hands the table to one player at a time); emits the resulting cards/busts. A plain `hit` keeps your turn; `stand`, `double` or a bust ends it and the loop moves to the next player. |
 | `disconnect` | — | if the player is *not* mid-round, they are unseated and the load drops. Mid-round players stay: the round auto-stands them on timeout and their result is still reported. |
 
 Events emitted to the table's room: `game_starting`, `place_bets`, `bet_confirmed`,
-`no_players_bet`, `initial_cards`, `card_drawn`, `player_busted`, `user_stood`,
-`user_doubled`, `player_auto_stand`, `player_action_done`, `dealer_done`,
-`round_results` (`{results: [{username, balance_difference}]}`), `error`.
+`no_players_bet`, `initial_cards`, `turn_started` (`{user}` — whose turn it is now),
+`card_drawn`, `player_busted`, `user_stood`, `user_doubled`, `player_auto_stand`,
+`dealer_turn`, `dealer_card` (`{card, cards}` — one per card as the dealer draws),
+`dealer_done`, `round_results` (`{results: [...], next_round_in}`), `error`.
 
 ## loop.py — the round state machine
 
-One `GameLoop` thread per active table. Per round:
+One `GameLoop` thread per active table. It keeps running for as long as anyone is
+seated, playing one round after another **on its own** — a finished round (or an
+empty one) never needs a page reload. Per round:
 
 1. `game_starting`, then `place_bets`; wait up to **35 s** (`BET_WINDOW_SECONDS`) or
-   until everyone has bet. Players who didn't bet are excluded from the round; if
-   nobody bet, the round is cancelled.
-2. Deal two cards to each player, emit `initial_cards`.
-3. Wait up to **60 s** (`ACTION_WINDOW_SECONDS`) or until every player stood, busted
-   or doubled; whoever is still undecided is **auto-stood**.
-4. Dealer draws to 17 (`dealer_done`).
+   until every seated player has bet. Betting is **opt-in**: players who didn't bet
+   are excluded from the round and stake nothing. If nobody bet, the loop emits
+   `no_players_bet` and simply offers a fresh betting round (it does **not** stop).
+2. Deal two cards to each player who bet, emit `initial_cards`.
+3. **Turn by turn**, the loop hands the table to one player at a time: it emits
+   `turn_started {user}` and waits up to **30 s** (`TURN_WINDOW_SECONDS`) for that
+   player to `stand`, `double` or bust (a `hit` that doesn't bust keeps their turn).
+   A hand already worth 21 is stood automatically; a player who runs out the clock is
+   **auto-stood**. Only then does the next player's turn begin.
+4. Dealer draws to 17, revealing **one card at a time** (`dealer_turn`, then a
+   `dealer_card` per draw with a short delay between) and finally `dealer_done`.
 5. `game.determine_result()` computes each player's **balance delta**
    (win = +bet, loss/bust = −bet, push = 0, blackjack beats a non-blackjack 21).
 6. **The deltas are enqueued to the outbox first**, then `round_results` is emitted.
    The loop never talks to central directly — delivery is the sender thread's job.
-7. Observers become players and the next round starts if anyone is still seated.
+7. The loop **pauses (`ROUND_RESULT_DELAY`, ~12 s)** so players can take in the
+   outcome and the final hands, then observers become players and it starts the
+   next round automatically if anyone is still seated.
+
+The round is deliberately paced so it can be watched rather than flashing past:
+`PRE_DEALER_DELAY`, `DEALER_DRAW_DELAY` (between dealer cards), `POST_DEALER_DELAY`
+and `ROUND_RESULT_DELAY` are the tunable knobs, and the loop paces itself with
+`socketio.sleep()` (safe under the server's threading async mode).
 
 ## outbox.py + the sender thread — never lose a finished round
 

@@ -13,8 +13,10 @@
         .zone { background: rgba(0,0,0,.25); border-radius: 10px; padding: 14px 18px; margin-bottom: 14px; }
         .player { margin-bottom: 8px; }
         .me { color: #ffd966; }
+        .turn { outline: 2px solid #ffd966; border-radius: 6px; padding: 4px 8px; }
         #status { font-size: 1.1em; margin-bottom: 14px; }
-        #actions button, #actions input { font-size: 1em; padding: 8px 14px; margin-right: 6px; }
+        #actions button, #bet-controls button, #bet-controls input { font-size: 1em; padding: 8px 14px; margin-right: 6px; }
+        button:disabled { opacity: .5; cursor: not-allowed; }
         #actions { display: none; }
         #bet-controls { display: none; }
         #log { font-size: .9em; max-height: 180px; overflow-y: auto; opacity: .85; }
@@ -49,12 +51,12 @@
     <div class="zone" id="controls">
         <span id="bet-controls">
             <input id="bet-amount" placeholder="Your bet" type="number" min="1">
-            <button onclick="sendBet()">Place bet</button>
+            <button id="bet-button" onclick="sendBet()">Place bet</button>
         </span>
         <span id="actions">
             <button onclick="sendAction('hit')">Hit</button>
             <button onclick="sendAction('stand')">Stand</button>
-            <button onclick="sendAction('double')">Double down</button>
+            <button id="double-button" onclick="sendAction('double')">Double down</button>
         </span>
     </div>
 
@@ -68,6 +70,7 @@
         const me = "{{ username }}";
         let balance = parseFloat("{{ balance }}");
         let myBet = 0;
+        let countdownTimer = null;
         const socket = io();
 
         const $ = id => document.getElementById(id);
@@ -78,10 +81,33 @@
             $("log").prepend(line);
         }
         function renderCards(cards) {
-            return cards.map(c => `<span class="card">${c}</span>`).join("") || "—";
+            return cards.map(cardSpan).join("") || "—";
         }
-        function showBetControls(show) { $("bet-controls").style.display = show ? "inline" : "none"; }
-        function showActions(show) { $("actions").style.display = show ? "inline" : "none"; }
+        function cardSpan(c) {
+            const red = c.includes("♥") || c.includes("♦") ? ' style="color:#c00"' : "";
+            return `<span class="card"${red}>${c}</span>`;
+        }
+        function showBetControls(show) {
+            $("bet-controls").style.display = show ? "inline" : "none";
+            if (show) $("bet-button").disabled = false;
+        }
+        function showActions(show) {
+            $("actions").style.display = show ? "inline" : "none";
+            // Double down is only legal on the opening two cards.
+            if (show) $("double-button").style.display = "inline";
+        }
+
+        // --- Actions the player takes (these are what the buttons call) ---
+        function sendBet() {
+            const amount = parseFloat($("bet-amount").value);
+            if (!(amount > 0)) { setStatus("Enter a bet amount greater than 0."); return; }
+            if (amount > balance) { setStatus("You can't bet more than your balance."); return; }
+            $("bet-button").disabled = true;   // avoid double-submits; re-enabled next round
+            socket.emit("bet", { amount });
+        }
+        function sendAction(action) {
+            socket.emit("player_action", { action });
+        }
 
         socket.on("connect", () => socket.emit("join"));
 
@@ -90,10 +116,17 @@
                                      : `Watching ${data.table_id}: a round is in progress, you play the next one.`);
         });
 
-        socket.on("game_starting", () => { setStatus("Round starting…"); $("dealer-cards").innerHTML = "—"; });
+        socket.on("game_starting", () => {
+            clearCountdown();
+            setStatus("Round starting…");
+            $("dealer-cards").innerHTML = "—";
+            $("players-area").innerHTML = "—";
+            myBet = 0;
+        });
 
         socket.on("place_bets", () => {
-            setStatus("Place your bet!");
+            setStatus("Place your bet to join this round — or sit it out and stake nothing.");
+            showActions(false);
             showBetControls(true);
         });
 
@@ -107,7 +140,7 @@
         });
 
         socket.on("no_players_bet", () => {
-            setStatus("Nobody bet: round cancelled. Reload the page from the central server to play again.");
+            setStatus("Nobody bet this round. Starting a new betting round…");
             showBetControls(false);
             showActions(false);
         });
@@ -117,21 +150,30 @@
             for (const user in data.hands) {
                 const div = document.createElement("div");
                 div.className = "player" + (user === me ? " me" : "");
-                div.innerHTML = `<strong>${user}</strong>: ${renderCards(data.hands[user])}`;
+                div.innerHTML = `<strong>${user}</strong>: <span class="hand">${renderCards(data.hands[user])}</span>`;
                 div.id = `hand-${user}`;
                 $("players-area").appendChild(div);
             }
             if (data.dealer_cards) $("dealer-cards").innerHTML = renderCards(data.dealer_cards);
-            if (data.hands[me]) {
-                setStatus("Your move: hit, stand or double down.");
+            // Action buttons are governed by turn_started, not by the deal.
+        });
+
+        socket.on("turn_started", data => {
+            highlightTurn(data.user);
+            if (data.user === me) {
+                setStatus("Your turn: hit, stand or double down.");
                 showActions(true);
+            } else {
+                showActions(false);
+                setStatus(`Waiting for ${data.user} to play…`);
             }
         });
 
         socket.on("card_drawn", data => {
             log(`${data.user} drew ${data.card}`);
-            const hand = $(`hand-${data.user}`);
-            if (hand) hand.innerHTML += `<span class="card">${data.card}</span>`;
+            appendCard(data.user, data.card);
+            // After the first hit a hand has 3+ cards, so doubling is no longer legal.
+            if (data.user === me) $("double-button").style.display = "none";
         });
 
         socket.on("player_busted", data => {
@@ -141,30 +183,42 @@
 
         socket.on("user_stood", data => {
             log(`${data.user} stands`);
-            if (data.user === me) { setStatus("Standing. Waiting for the round to finish…"); showActions(false); }
+            if (data.user === me) { setStatus("Standing. Waiting for your turn to end…"); showActions(false); }
         });
 
         socket.on("user_doubled", data => {
             log(`${data.user} doubled down and drew ${data.card}`);
-            const hand = $(`hand-${data.user}`);
-            if (hand) hand.innerHTML += `<span class="card">${data.card}</span>`;
+            appendCard(data.user, data.card);
             if (data.user === me) { setStatus("Doubled down. Waiting for the round to finish…"); showActions(false); }
         });
 
         socket.on("player_auto_stand", data => {
             log(`${data.user} took too long: automatic stand`);
-            if (data.user === me) { showActions(false); }
+            if (data.user === me) { setStatus("Time's up: automatic stand."); showActions(false); }
         });
 
-        socket.on("player_action_done", () => setStatus("All players done. Dealer's turn…"));
+        socket.on("dealer_turn", () => {
+            clearTurnHighlight();
+            $("dealer-cards").innerHTML = "";
+            setStatus("Dealer's turn — drawing…");
+        });
+
+        socket.on("dealer_card", data => {
+            log(`Dealer drew ${data.card}`);
+            $("dealer-cards").innerHTML += cardSpan(data.card);
+        });
 
         socket.on("dealer_done", data => {
+            clearTurnHighlight();
             $("dealer-cards").innerHTML = renderCards(data.cards);
+            setStatus("Dealer stands. Settling the round…");
         });
 
         socket.on("round_results", data => {
             showActions(false);
             showBetControls(false);
+            clearTurnHighlight();
+            let myOutcome = null;
             for (const res of data.results) {
                 const outcome = res.balance_difference > 0 ? `won $${res.balance_difference}`
                               : res.balance_difference < 0 ? `lost $${-res.balance_difference}`
@@ -173,12 +227,46 @@
                 if (res.username === me) {
                     balance += res.balance_difference;
                     $("balance").innerText = balance.toFixed(2);
-                    setStatus(`Round over: you ${outcome}. Next round starts shortly…`);
+                    myOutcome = outcome;
                 }
             }
+            const base = myOutcome ? `Round over: you ${myOutcome}.` : "Round over.";
+            startCountdown(data.next_round_in || 0, base);
         });
 
         socket.on("error", data => log(`Error: ${data.message}`));
+
+        // --- small DOM helpers ---
+        function appendCard(user, card) {
+            const hand = $(`hand-${user}`);
+            const span = hand && hand.querySelector(".hand");
+            if (span) span.innerHTML += cardSpan(card);
+        }
+        function highlightTurn(user) {
+            clearTurnHighlight();
+            const hand = $(`hand-${user}`);
+            if (hand) hand.classList.add("turn");
+        }
+        function clearTurnHighlight() {
+            document.querySelectorAll(".player.turn").forEach(el => el.classList.remove("turn"));
+        }
+        function clearCountdown() {
+            if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        }
+        function startCountdown(seconds, base) {
+            clearCountdown();
+            let left = Math.round(seconds);
+            const render = () => setStatus(left > 0 ? `${base} Next round in ${left}s…`
+                                                    : `${base} Next round starting…`);
+            render();
+            if (left > 0) {
+                countdownTimer = setInterval(() => {
+                    left -= 1;
+                    if (left <= 0) clearCountdown();
+                    render();
+                }, 1000);
+            }
+        }
     </script>
     {% endif %}
 </body>

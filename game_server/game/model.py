@@ -137,6 +137,10 @@ class Game:
                 and Hand.get_hand_value(user.get_hand()) == Hand.get_hand_value(self.__dealer_hand))
 
     def player_double_down(self, user):
+        if user not in self.__bets:
+            raise ValueError("Cannot double down without a bet")
+        if len(user.get_hand()) != Hand.BLACKJACK_HAND_LENGTH:
+            raise ValueError("Can only double down on the first two cards")
         self.place_bet(user, self.__bets[user] * 2)
         card = self.__deck.draw_card()
         user.add_card(card)
@@ -213,6 +217,7 @@ class Deck:
 
 class Card:
     SUITS = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
+    SUIT_SYMBOLS = ['♥', '♦', '♣', '♠']
     TYPES = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
     VALUES = {
         'A': 11,
@@ -235,7 +240,7 @@ class Card:
         return self.value
 
     def __str__(self):
-        return f"{self.type}{self.suit}"
+        return f"{self.type}{self.SUIT_SYMBOLS[self.suit]}"
 
     def __repr__(self):
         return self.__str__()
