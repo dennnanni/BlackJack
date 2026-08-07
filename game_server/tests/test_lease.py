@@ -6,7 +6,6 @@ freezing between rounds instead of playing on.
 import os
 import time
 
-os.environ.setdefault('SHARED_SECRET', 'test-secret')
 
 import game_server.loop as loop_module
 from game_server.central_client import CentralClient

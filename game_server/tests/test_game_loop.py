@@ -10,7 +10,6 @@ import threading
 import time
 
 # Redirect the durable outbox to a throwaway file before importing the app.
-os.environ.setdefault('SHARED_SECRET', 'test-secret')
 os.environ['OUTBOX_PATH'] = os.path.join(
     os.environ.get('PYTEST_TMPDIR', '/tmp'), 'test_outbox_gameloop.db')
 
