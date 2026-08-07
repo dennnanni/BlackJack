@@ -128,9 +128,15 @@ def take_seat(username, server_id, ttl):
     for a new round anyway) is taken over instead of locking the player out
     forever. Two concurrent claims race on the primary key, so exactly one
     of them wins.
+
+    The row is read FOR UPDATE because the primary key only arbitrates the
+    *insert* path. Taking over an existing seat is a read-modify-write, and
+    two concurrent takeovers of the same dead server's seat would both commit
+    — landing one account on two tables, the exact thing this table exists to
+    prevent. The lock serialises them so the second sees the first's write.
     """
     with SessionLocal() as session:
-        seat = session.get(Seat, username)
+        seat = session.get(Seat, username, with_for_update=True)
         if seat is not None:
             owner = session.get(GameServer, seat.server_id)
             owner_live = owner is not None and owner.last_seen >= time.time() - ttl

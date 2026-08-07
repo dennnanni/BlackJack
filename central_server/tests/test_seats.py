@@ -46,6 +46,31 @@ def test_seat_of_a_dead_server_is_taken_over(session_db):
     assert db.take_seat('alice', alive, SEAT_TAKEOVER_TTL)
 
 
+def test_taking_over_a_seat_locks_the_row(session_db, monkeypatch):
+    """The primary key only arbitrates the *insert* path. Taking an existing
+    seat over is a read-modify-write, so two concurrent takeovers would both
+    commit and seat one account at two tables; the row is read FOR UPDATE to
+    serialise them. (The race itself needs a real Postgres — sqlite ignores
+    the clause and serialises writes anyway — so what is pinned here is that
+    the locking read is still being asked for.)
+    """
+    dead = _add_server(session_db, seen_ago=SEAT_TAKEOVER_TTL + 5)
+    alive = _add_server(session_db)
+    db.take_seat('alice', dead, SEAT_TAKEOVER_TTL)
+
+    locked = []
+    original = db.SessionLocal.class_.get
+
+    def spy(self, entity, ident, **kwargs):
+        if entity is db.Seat:
+            locked.append(kwargs.get('with_for_update'))
+        return original(self, entity, ident, **kwargs)
+
+    monkeypatch.setattr(db.SessionLocal.class_, 'get', spy)
+    assert db.take_seat('alice', alive, SEAT_TAKEOVER_TTL)
+    assert locked == [True]
+
+
 def test_heartbeat_releases_the_seat_of_a_player_who_left(session_db):
     server_id = _add_server(session_db)
     db.take_seat('alice', server_id, SEAT_TAKEOVER_TTL)
