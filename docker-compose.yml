@@ -23,6 +23,9 @@ services:
       - "16000:5000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/blackjack
+      # Pinned so a restart does not invalidate every session cookie and log
+      # all the players out. Override it for anything but a demo.
+      SECRET_KEY: ${SECRET_KEY:-blackjack-demo-session-key}
       PYTHONUNBUFFERED: "1"
     env_file: .env
     networks:
@@ -40,6 +43,7 @@ services:
       SERVER_PORT: "8001"
       CENTRAL_URL: http://central:5000
       CENTRAL_PUBLIC_URL: http://localhost:16000   # where "leave table" sends the browser
+      SECRET_KEY: ${SECRET_KEY:-blackjack-demo-session-key}
       OUTBOX_PATH: /data/outbox.db
       PYTHONUNBUFFERED: "1"
     env_file: .env
@@ -61,6 +65,7 @@ services:
       SERVER_PORT: "8002"
       CENTRAL_URL: http://central:5000
       CENTRAL_PUBLIC_URL: http://localhost:16000   # where "leave table" sends the browser
+      SECRET_KEY: ${SECRET_KEY:-blackjack-demo-session-key}
       OUTBOX_PATH: /data/outbox.db
       PYTHONUNBUFFERED: "1"
     env_file: .env

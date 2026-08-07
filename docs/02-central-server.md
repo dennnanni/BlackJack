@@ -97,7 +97,7 @@ but housekeeping.
 | `SHARED_SECRET` | *(required, from `.env`)* | HS256 key for every JWT in the system |
 | `DATABASE_URL` | local postgres | SQLAlchemy URL |
 | `CENTRAL_PORT` | 5000 | listen port |
-| `SECRET_KEY` | random per boot | Flask session-cookie key |
+| `SECRET_KEY` | random per boot | Flask session-cookie key (pin it, or a restart logs everyone out) |
 | `HEARTBEAT_TTL` | 15 s | freshness window for dispatch (3× the heartbeat interval) |
 | `REAPER_INTERVAL` | 5 s | reaper period |
 | `JOIN_TOKEN_TTL` | 120 s | join-token lifetime |

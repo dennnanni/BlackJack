@@ -80,9 +80,15 @@ The central tests run against an in-memory SQLite database (see
 | `SEAT_TAKEOVER_TTL` | central | 30 (**must exceed** the game servers' `LEASE_TIMEOUT`) |
 | `LEASE_TIMEOUT` | game server | 15 (**must stay below** central's `SEAT_TAKEOVER_TTL`) |
 | `SERVER_HOST` / `SERVER_PORT` | game server | 127.0.0.1 / 8000 |
-| `CENTRAL_URL` | game server | http://localhost:5000 |
+| `CENTRAL_URL` | game server | http://localhost:5000 (how the *process* reaches central) |
+| `CENTRAL_PUBLIC_URL` | game server | `CENTRAL_URL` (where "leave table" sends the *browser*) |
 | `CAPACITY` / `HEARTBEAT_INTERVAL` | game server | 10 / 5 |
 | `OUTBOX_PATH` | game server | `outbox.db` |
-| `SECRET_KEY` | both | random per boot |
+| `SECRET_KEY` | both | random per boot — compose pins it, otherwise a restart logs every player out |
+
+Session cookies are named per process (`central_session`, `game_session_<port>`)
+because cookies are scoped to a host and ignore the port: with the default name,
+landing on a game server on `localhost` would overwrite central's cookie and log the
+player out of their account.
 
 Next: [09 — Partition-Tolerance Demo](09-partition-demo.md).

@@ -50,6 +50,10 @@ def _sender_loop():
 def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = SECRET_KEY
+    # Per-port cookie name: cookies ignore ports, so on a single host every
+    # game server (and central) would otherwise share one 'session' cookie and
+    # clobber each other's — see central_server/app.py.
+    app.config['SESSION_COOKIE_NAME'] = f'game_session_{SERVER_PORT}'
 
     from game_server.join import game_bp
     app.register_blueprint(game_bp)

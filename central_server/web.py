@@ -62,7 +62,9 @@ def login_post():
     if user is None or auth.get_hashed_password(password, user.salt) != user.password:
         return render_template('access.html', login=True, error='Wrong username or password')
 
-    login_user(UserSession(username))
+    # remember=True: the login outlives the browser being closed, so a player
+    # coming back to central from a game server is still who they were.
+    login_user(UserSession(username), remember=True)
     return redirect(f'/user/{username}')
 
 
