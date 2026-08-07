@@ -78,7 +78,8 @@ docker compose exec central poetry run python - <<'EOF'
 import time, jwt, requests
 from central_server.config import SHARED_SECRET
 now = int(time.time())
-tok = jwt.encode({'server_id': 1, 'iat': now, 'exp': now+60}, SHARED_SECRET, algorithm='HS256')
+tok = jwt.encode({'typ': 'server', 'server_id': 1, 'iat': now, 'exp': now+60},
+                 SHARED_SECRET, algorithm='HS256')
 body = {'round_id': 'demo-duplicate', 'results': [{'username': '<YOUR-USER>', 'balance_difference': 100}]}
 for i in range(2):
     r = requests.post('http://localhost:5000/api/servers/results', json=body,

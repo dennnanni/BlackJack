@@ -43,7 +43,7 @@ def test_results_endpoint_is_idempotent(session_db, alice):
     client = app.test_client()
 
     now = int(time.time())
-    bearer = jwt.encode({'server_id': 1, 'iat': now, 'exp': now + 60},
+    bearer = jwt.encode({'typ': 'server', 'server_id': 1, 'iat': now, 'exp': now + 60},
                         'test-secret', algorithm='HS256')
     payload = {'round_id': 'round-http',
                'results': [{'username': 'alice', 'balance_difference': -250.0}]}
@@ -68,10 +68,36 @@ def test_results_endpoint_rejects_bad_tokens(session_db, alice):
     assert response.status_code == 401
 
     now = int(time.time())
-    forged = jwt.encode({'server_id': 1, 'iat': now, 'exp': now + 60},
+    forged = jwt.encode({'typ': 'server', 'server_id': 1, 'iat': now, 'exp': now + 60},
                         'wrong-secret', algorithm='HS256')
     response = client.post('/api/servers/results', json=payload,
                            headers={'Authorization': f'Bearer {forged}'})
     assert response.status_code == 401
 
+    # A token signed with the *right* secret but carrying no class at all.
+    untyped = jwt.encode({'server_id': 1, 'iat': now, 'exp': now + 60},
+                         'test-secret', algorithm='HS256')
+    response = client.post('/api/servers/results', json=payload,
+                           headers={'Authorization': f'Bearer {untyped}'})
+    assert response.status_code == 401
+
+    assert _balance(session_db, alice) == 1000.0
+
+
+def test_a_players_own_join_token_cannot_post_results(session_db, alice):
+    """The token central hands the browser at dispatch is signed with the same
+    secret and carries a server_id, so before the typ claim it was accepted
+    here: any logged-in player could credit themselves whatever they liked."""
+    from central_server import auth
+    from central_server.app import create_app
+    client = create_app().test_client()
+
+    join_token = auth.mint_join_token('alice', 1000, server_id=1)
+    response = client.post(
+        '/api/servers/results',
+        json={'round_id': 'stolen', 'results': [{'username': 'alice',
+                                                 'balance_difference': 1_000_000}]},
+        headers={'Authorization': f'Bearer {join_token}'})
+
+    assert response.status_code == 401
     assert _balance(session_db, alice) == 1000.0

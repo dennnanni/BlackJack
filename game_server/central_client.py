@@ -11,7 +11,8 @@ import requests
 from game_server.config import (CAPACITY, CENTRAL_URL, LEASE_TIMEOUT,
                                 SHARED_SECRET)
 from shared.messages import CAPACITY as CAPACITY_FIELD
-from shared.messages import HOST, PLAYERS, PORT, RESULTS, ROUND_ID, SERVER_ID
+from shared.messages import (HOST, PLAYERS, PORT, RESULTS, ROUND_ID, SERVER_ID,
+                             TYP, TYP_SERVER)
 
 SERVER_TOKEN_TTL = 60
 
@@ -41,7 +42,9 @@ class CentralClient:
 
     def _bearer(self):
         now = int(time.time())
-        claims = {'iat': now, 'exp': now + SERVER_TOKEN_TTL}
+        # typ marks this as a *server* token: central refuses to accept a join
+        # token here, and a browser never holds one of these.
+        claims = {TYP: TYP_SERVER, 'iat': now, 'exp': now + SERVER_TOKEN_TTL}
         if self.server_id is not None:
             claims[SERVER_ID] = self.server_id
         token = jwt.encode(claims, SHARED_SECRET, algorithm='HS256')

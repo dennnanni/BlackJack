@@ -19,9 +19,10 @@ browsers. It is the HS256 signing key for:
 ### (a) Server tokens — "I am part of the system"
 
 Attached by a game server (as `Authorization: Bearer …`) to every call to central.
-Claims: `server_id` (absent only during the registration bootstrap, where knowing
-the secret *is* the authorization), `iat`, `exp` (60 s). Central rejects missing,
-forged and expired tokens, and requires the `server_id` claim on heartbeat/results.
+Claims: `typ: "server"`, `server_id` (absent only during the registration bootstrap,
+where knowing the secret *is* the authorization), `iat`, `exp` (60 s). Central rejects
+missing, forged and expired tokens, and requires the `server_id` claim on
+heartbeat/results.
 
 ### (b) Join tokens — "this player may enter that server"
 
@@ -29,7 +30,8 @@ Minted by central at dispatch, posted by the browser to the game server's `/join
 Claims:
 
 ```json
-{"sub": "<username>", "balance": 950.0, "server_id": 3, "iat": ..., "exp": "+120s"}
+{"typ": "join", "sub": "<username>", "balance": 950.0, "server_id": 3,
+ "iat": ..., "exp": "+120s"}
 ```
 
 The game server verifies the signature and **checks `server_id` against its own id**,
@@ -37,6 +39,23 @@ so a token minted for one server is useless on every other. The username and bal
 the game uses come **from this signed token** — the browser has no way to inject its
 own balance (before the refactor, it literally sent one in the `join` event; that
 hole is closed).
+
+### Why both carry a `typ` claim
+
+The two kinds are HS256 over the *same* secret, so a valid signature proves only
+"someone in the trust domain minted this" — never *which door* the holder may open.
+That distinction matters because **a join token is deliberately given away**: it is a
+hidden form field in `dispatch.html`, sitting in the player's own browser. Since it
+also carries a `server_id`, a verifier that checked only the signature would accept
+it as a server token — and any logged-in player could POST to
+`/api/servers/results` and credit themselves an arbitrary balance.
+
+So the class is part of what is signed, and each verifier demands its own:
+`verify_server_token` rejects anything that is not `typ: "server"`,
+`verify_join_token` rejects anything that is not `typ: "join"`. Untyped tokens are
+refused by both. The lesson generalises past this project: **authentication is not
+authorization, and one signing key over two audiences needs the audience inside the
+signature.**
 
 ## Trust boundaries, summarized
 
@@ -50,7 +69,8 @@ hole is closed).
 
 With a *single* shared secret, any game server could technically verify or mint a
 token meant for another. We accept this because: (1) the only holders of the secret
-are our own processes — there is no third-party tenancy; (2) join tokens are bound
+are our own processes — the `typ` claim is what keeps *browsers* from counting as
+holders, which is the case that actually bit us; (2) join tokens are bound
 to one server by the `server_id` claim and die after 2 minutes; (3) results are
 deduplicated by `round_id`, so even a replayed results-call cannot double-apply.
 In exchange we deleted the entire Fernet handshake (double encryption at

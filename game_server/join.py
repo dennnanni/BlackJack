@@ -7,6 +7,7 @@ from flask import (Blueprint, jsonify, redirect, render_template, request,
 
 from game_server.central_client import client
 from game_server.config import CENTRAL_PUBLIC_URL, SHARED_SECRET
+from shared.messages import TYP, TYP_JOIN
 
 game_bp = Blueprint('game', __name__)
 
@@ -21,12 +22,16 @@ def verify_join_token(token, expected_server_id):
     """Decode and validate a join token minted by the central server.
 
     Returns the token payload; raises JoinError if the token is invalid,
-    expired, or was minted for a different server.
+    expired, not a join token, or was minted for a different server.
     """
     try:
         payload = jwt.decode(token, SHARED_SECRET, algorithms=['HS256'])
     except jwt.InvalidTokenError as e:
         raise JoinError(f'Invalid token: {e}', 401)
+    # The mirror of central's check: a server token is signed with the same
+    # secret and must not be usable to walk in as a player.
+    if payload.get(TYP) != TYP_JOIN:
+        raise JoinError('Not a join token', 401)
     if payload.get('server_id') != expected_server_id:
         raise JoinError('Token was minted for a different server', 403)
     return payload
