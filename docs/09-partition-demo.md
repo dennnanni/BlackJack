@@ -2,8 +2,8 @@
 
 One sitting, ~5 minutes, exercises every mechanism in
 [06](06-distributed-systems.md): registration retry, heartbeat failure detection,
-autonomous gameplay, durable buffering, at-least-once delivery and exactly-once
-application.
+autonomous gameplay, holder-side lease expiry, durable buffering, at-least-once
+delivery and exactly-once application.
 
 Setup: `docker compose up --build`. The compose file defines **two networks** for
 exactly this purpose: `blackjack_internal` (game servers ↔ central ↔ postgres) and
@@ -29,9 +29,15 @@ docker network disconnect blackjack_internal blackjack-game_server_1-1
 4. Within ~15 s (`HEARTBEAT_TTL`) the server's heartbeats have gone stale and it is
    out of the dispatch set. Failure detection is a predicate, not a thread, so the
    way to *see* it is step 7: **Play** no longer sends anyone there.
-5. **The game page still works.** Play one or two full rounds — betting, cards,
-   dealer, results all happen locally. The game server logs show the sender failing:
-   `[central] sending results for round <uuid> failed ... retrying`.
+5. **The game page still works — for the length of the lease.** Play a round or two:
+   betting, cards, dealer and results all happen locally. The game server logs show
+   the sender failing: `[central] sending results for round <uuid> failed ... retrying`.
+   Then, once 15 s (`LEASE_TIMEOUT`) have passed without central confirming a
+   heartbeat, the page shows **"connection to the central server lost — no new rounds"**
+   and the table freezes. Any round already dealt was finished normally. Nobody is
+   kicked, nothing is voided: this is the game server refusing to stake money it can
+   no longer prove it is allowed to stake
+   ([06 §6.7](06-distributed-systems.md#67-handling-the-partition-holder-side-lease-expiry)).
 6. Refresh the central home page: the balance of record is **unchanged** — the
    results are parked in the outbox.
 7. (Optional, second browser/incognito) Log in as another player and hit **Play**:
@@ -56,8 +62,10 @@ docker network connect blackjack_internal blackjack-game_server_1-1
 ```
 
 9. Within a few seconds: the sender flushes (game-server logs), central applies the
-   deltas, and the server's heartbeats resume — hit **Play** again and it is
-   dispatchable once more, with no recovery logic anywhere. Refresh the central
+   deltas, and the heartbeats resume. The frozen table **unfreezes by itself** — the
+   banner clears and a new betting round opens, with no reload and nobody
+   re-dispatched. Hit **Play** and the server is dispatchable again, with no recovery
+   logic anywhere. Refresh the central
    home page — the balance of record **converged** to exactly
    `1000 + Σ(deltas of every round played)`, including the ones played mid-partition.
 
@@ -95,3 +103,10 @@ once and the balance of record would reconcile to a number neither table ever sa
 Now close the game tab and wait one heartbeat (~5 s): the game server stops listing
 that player, central releases the seat, and **Play** works again. Nothing had to
 time out, and no explicit "leave" message had to survive the tab being closed.
+
+**The two timeouts are what make step 2 safe.** Central only reassigns a silent
+server's seats after `SEAT_TAKEOVER_TTL` (30 s), while the game server has stopped
+starting rounds after `LEASE_TIMEOUT` (15 s). So during a partition the player is
+already frozen on game server 1 *before* central would let them sit down at game
+server 2: the takeover is not a guess that the server crashed, it is safe either way.
+Worth watching the clock during the demo — freeze at ~15 s, seat released at ~30 s.

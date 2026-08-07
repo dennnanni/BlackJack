@@ -35,7 +35,10 @@ mints a short-lived **join token** (a JWT carrying the username, the balance, an
 the id of the chosen server), and the browser posts it to that game server's
 `/join`. The **game server** verifies the token with
 the same shared secret, seats the player at a table, and runs Blackjack rounds over
-**Socket.IO**. When a round ends, its results are written to an **on-disk outbox**
+**Socket.IO** — for as long as that server's **lease** from central holds; when the
+link to central goes silent it freezes new rounds rather than stake balances it can
+no longer settle, and thaws by itself on heal. When a round ends, its results are
+written to an **on-disk outbox**
 first and then delivered to central with retries; central applies them **idempotently**
 (deduplicated by `round_id`), so balances converge exactly once even across crashes,
 retries and network partitions.

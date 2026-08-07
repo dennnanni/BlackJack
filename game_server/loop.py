@@ -8,6 +8,7 @@ from threading import Event, Thread
 from uuid import uuid4
 
 from game_server.app import outbox, socketio
+from game_server.central_client import client
 from game_server.game.model import Deck, Game, Hand
 
 BET_WINDOW_SECONDS = 35
@@ -19,6 +20,8 @@ PRE_DEALER_DELAY = 1.5      # a beat after the last player, before the dealer ac
 DEALER_DRAW_DELAY = 1.2     # between each dealer card, so the hand builds up visibly
 POST_DEALER_DELAY = 2.0     # let the finished dealer hand sink in
 ROUND_RESULT_DELAY = 7     # show the outcome and final hands before the table resets
+
+LEASE_CHECK_SECONDS = 1    # how often a frozen table re-checks the lease
 
 
 class GameLoop(Thread):
@@ -36,10 +39,32 @@ class GameLoop(Thread):
 
     def run(self):
         # Keep offering rounds for as long as anyone is seated. Each iteration
-        # is a full round; nothing here waits for a human to restart it.
+        # is a full round; nothing here waits for a human to restart it — only
+        # the lease can hold the next one back.
         while self.table.is_ready_to_start():
+            self._await_lease()
+            if not self.table.is_ready_to_start():
+                break  # everyone left while the table was frozen
             self._play_round()
         self.running = False
+
+    def _await_lease(self):
+        """Hold the *next* round back while this server's lease has expired.
+
+        Betting stakes money that only central can settle, and central will
+        hand a silent server's players to someone else. So when central has
+        been unreachable for longer than LEASE_TIMEOUT this server stops
+        starting rounds: the table freezes, nobody is kicked, and play resumes
+        by itself when the lease is renewed. A round already in progress is
+        never aborted — it is dealt, settled and queued in the outbox as usual.
+        """
+        if client.lease_valid():
+            return
+        socketio.emit('lease_expired', {'table': self.table.id}, to=self.room_id)
+        while not client.lease_valid() and self.table.is_ready_to_start():
+            socketio.sleep(LEASE_CHECK_SECONDS)
+        if client.lease_valid():
+            socketio.emit('lease_restored', {'table': self.table.id}, to=self.room_id)
 
     def _play_round(self):
         self.bets_done_event.clear()

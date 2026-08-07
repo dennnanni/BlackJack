@@ -53,7 +53,7 @@ Add more game servers by picking a different `SERVER_PORT`/`OUTBOX_PATH` per pro
 ## The test suite
 
 ```bash
-poetry run pytest      # 55 tests
+poetry run pytest      # 58 tests
 ```
 
 | Where | What it pins |
@@ -61,6 +61,7 @@ poetry run pytest      # 55 tests
 | `game_server/tests/test_{card_and_deck,hand,user,game,game_logic,tablemanager}.py` | the game model: hand values (multi-ace), blackjack detection, betting limits, payout rules (win/lose/push/dealer-bust), seating |
 | `game_server/tests/test_outbox.py` | durability: entries survive reopen, only `ack` removes them, duplicate enqueue is a no-op |
 | `game_server/tests/test_join_token.py` | join tokens: valid accepted; wrong-server, expired and forged rejected |
+| `game_server/tests/test_lease.py` | partition handling: the lease expires when central goes silent, `LEASE_TIMEOUT < SEAT_TAKEOVER_TTL` holds, and a frozen table starts no round yet resumes on its own |
 | `central_server/tests/test_dispatcher.py` | failure detection & dispatch: stale and full servers excluded, least-loaded wins, a recovered server becomes eligible again |
 | `central_server/tests/test_results_idempotency.py` | exactly-once effect: same `round_id` applies once (unit + HTTP), different rounds both apply, unauthorized results rejected |
 | `central_server/tests/test_seats.py` | one account, one table: a second dispatch elsewhere is refused, re-dispatch to the same table is not, a dead server's seat is taken over, heartbeats release the seat of a player who left but spare one still in transit |
@@ -76,6 +77,8 @@ The central tests run against an in-memory SQLite database (see
 | `DATABASE_URL` | central | `postgresql://postgres:postgres@localhost:5432/blackjack` |
 | `CENTRAL_PORT` | central | 5000 |
 | `HEARTBEAT_TTL` / `REAPER_INTERVAL` / `SEAT_GRACE` | central | 15 / 5 / 30 |
+| `SEAT_TAKEOVER_TTL` | central | 30 (**must exceed** the game servers' `LEASE_TIMEOUT`) |
+| `LEASE_TIMEOUT` | game server | 15 (**must stay below** central's `SEAT_TAKEOVER_TTL`) |
 | `SERVER_HOST` / `SERVER_PORT` | game server | 127.0.0.1 / 8000 |
 | `CENTRAL_URL` | game server | http://localhost:5000 |
 | `CAPACITY` / `HEARTBEAT_INTERVAL` | game server | 10 / 5 |

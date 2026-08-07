@@ -1,6 +1,6 @@
 # 06 — Distributed-Systems Mechanisms
 
-This is the graded core: six cooperating mechanisms, none heavy, that together give
+This is the graded core: seven cooperating mechanisms, none heavy, that together give
 horizontal scaling, failure detection and **network-partition tolerance** with
 **eventual consistency**.
 
@@ -61,9 +61,11 @@ Consequences:
   locally; their results pile up in the outbox and flush after the heal.
 - **Game server crashes mid-partition?** The outbox is on disk (a Docker volume in
   compose), so the results are still there when it restarts.
-- The one thing a partition blocks is **new joins** — minting a join token needs
-  central. That is the deliberate CP/AP boundary: identity and money-of-record stay
-  consistent; gameplay stays available.
+- **New joins** are blocked outright — minting a join token needs central. That is
+  the deliberate CP/AP boundary: identity and money-of-record stay consistent.
+- Gameplay stays available, but **not indefinitely**: after `LEASE_TIMEOUT` the
+  server stops starting new rounds (§6.7). Autonomy here is bounded on purpose —
+  that bound is what keeps the balance of record safe.
 
 ## 6.5 Exactly-once effect: the idempotency ledger
 
@@ -110,7 +112,7 @@ ever saw.
 The `seat` table makes the constraint explicit, with `username` as the primary key:
 
 ```
-POST /play → take_seat(username, chosen_server, HEARTBEAT_TTL)
+POST /play → take_seat(username, chosen_server, SEAT_TAKEOVER_TTL)
              ├─ no seat            → insert (a concurrent /play loses on the PK)
              ├─ seat on this server→ refresh (re-dispatch to the same table is fine)
              ├─ seat on a LIVE one → refuse: "you are already seated at a table"
@@ -129,36 +131,88 @@ Three properties worth noting:
   who closed the tab is unseated within one heartbeat. A freshly claimed seat is
   protected for `SEAT_GRACE` (30 s) so the player still travelling from the dispatch
   page to `/join` is not evicted by a heartbeat that predates their arrival.
-- **A dead owner does not hold seats hostage.** Honouring a seat whose server has
-  stopped heartbeating would lock those players out for good after a crash. The seat
-  is therefore taken over — which is safe when the server truly crashed, and is the
-  deliberate soft spot during a *partition*: see below.
+- **A silent owner does not hold seats hostage.** Honouring a seat whose server has
+  stopped heartbeating would lock those players out for good after a crash, so after
+  `SEAT_TAKEOVER_TTL` the seat is taken over. On its own that would be a *guess* that
+  the server crashed rather than being partitioned — §6.7 is what makes it sound.
+
+## 6.7 Handling the partition: holder-side lease expiry
+
+§6.6 leaves one hole, and it is the interesting one. Central sees **silence** from a
+game server, and a crashed server and a partitioned-but-perfectly-healthy one send
+exactly the same silence. Whatever central then does is a guess:
+
+- honour the seat forever → one crash locks those players out permanently;
+- give the seat away → the partitioned server is *still running rounds* for a player
+  who has now been re-dispatched elsewhere, and the same balance is staked twice.
+
+That dilemma is not solvable by choosing a smarter timeout on central's side, because
+the information central is missing does not exist on central's side. It is solvable
+by noticing what a join token really is: **a lease**. Central let this game server
+move a player's money on the assumption that it can hear from us, so that permission
+has an expiry — and a lease only the grantor tracks is not a lease, it is a hope. So
+the holder expires it too:
+
+```
+game server, before starting each round:
+    lease_valid()  ==  (time since central last ACKed a heartbeat) < LEASE_TIMEOUT
+    if not valid → emit lease_expired, freeze, re-check, resume when it returns
+```
+
+**The safety condition is an inequality**, and it is the whole argument:
+
+```
+LEASE_TIMEOUT (15 s, game server)  <  SEAT_TAKEOVER_TTL (30 s, central)
+```
+
+The holder gives up strictly before the grantor reassigns, so there is no instant at
+which two servers both believe they may stake the same player's balance. The 15 s
+margin covers one in-flight heartbeat plus clock-rate drift; note that the game
+server measures **elapsed time on its own monotonic clock**, so no clock
+synchronisation between hosts is assumed anywhere in this design.
+
+Freezing is deliberately gentle, because the point is to protect the money, not to
+punish the players:
+
+- the round **in progress is always finished** — dealt, settled, written to the
+  outbox as usual. Aborting a dealt hand is the one thing worse than continuing, and
+  its exposure is a single round;
+- only the **next** round is held back. The table, the seats and the sockets stay up;
+  the UI shows "connection to the central server lost — no new rounds";
+- when a heartbeat is ACKed again the loop emits `lease_restored` and play resumes by
+  itself. No kick, no re-dispatch, no page reload, nothing voided.
+
+The alternative worth naming (and rejecting) is **fencing**: give each seat an epoch
+and have central discard results carrying a stale one. It is the standard answer when
+the fenced-off writes are garbage from a zombie leader — but here they are the honest
+record of games that really happened, and since stakes are never debited up front,
+discarding them would take back a winner's winnings while leaving a loser's money
+untouched. That trades a money bug for a fairness bug. Freezing keeps every played
+round valid.
 
 ## The overdraft note (bounded inconsistency)
 
 During a partition a player keeps betting against the balance captured in their join
 token, so the balance of record lags reality and could in principle be overdrawn.
-This is the accepted AP trade-off, and it is **bounded** — the bound being the seat
-lease of §6.6: one account is seated at one table, so the exposure of a partition of
-duration *T* is at most
+This is the accepted AP trade-off, and after §6.7 it is bounded by a **constant**:
 
 ```
-max_overdraft ≈ (rounds per second at one table) × T × (max bet)
+max_overdraft ≈ (rounds playable within LEASE_TIMEOUT) × (max bet)
 ```
 
-with no cross-server multiplier, because a second dispatch is refused while the
-player's seat is held.
+— note what is *not* in that formula. There is no partition duration *T*: the
+exposure stops growing the moment the lease expires, however long the link stays
+down. And there is no cross-server multiplier, because a second dispatch is refused
+while the seat is held, and once it is given away the old server has already stopped
+staking. What remains is genuinely irreducible without debiting stakes up front,
+which would mean a synchronous round trip to central per bet — i.e. giving up
+partition tolerance altogether, which is the property the whole design exists to
+demonstrate.
 
-The one case where that bound is weakened is the *partial* partition the demo
-stages: a game server that keeps its players but loses the link to central stops
-heartbeating, its seats are eventually treated as free, and the player could be
-dispatched to a second server while still playing on the first. This is the price of
-the "a crashed server must not lock its players out" rule, and it is the honest
-statement of the trade-off: central cannot distinguish a crash from a partition —
-that is precisely the impossibility the whole design is arranged around. Making the
-seat unforgeable during a partition would require fencing it with an epoch that only
-the reachable side can advance, i.e. genuine consensus, which is deliberately out of
-scope here.
+The honest scope note: the seat's authority lives in a single Postgres behind a
+single central process. **Replicating central** is where this design would need
+consensus — a monotonic, partition-safe source for seat ownership — and that is
+deliberately out of scope here.
 
 ## Checklist (for the write-up)
 
@@ -170,6 +224,8 @@ scope here.
 - [x] **Eventual consistency** — additive deltas reconcile after heal
 - [x] **Idempotency / exactly-once effect** — `round_id` ledger, transactional
 - [x] **Mutual exclusion across the cluster** — one seat per account, leased by heartbeat
+- [x] **Partition *handling*** — holder-side lease expiry: the game server freezes new
+      rounds before central may reassign its players (`LEASE_TIMEOUT < SEAT_TAKEOVER_TTL`)
 - [x] Authentication across trust boundaries — signed, expiring, server-bound tokens
 
 See [09 — Partition-Tolerance Demo](09-partition-demo.md) for the script that

@@ -22,6 +22,12 @@ one registers itself with central and gets players dispatched to it. All game st
      (e.g. its registry was reset) and triggers a re-registration;
    - **outbox sender** — see below.
 
+The game server also tracks **when central last confirmed it** (a 200 on register or
+heartbeat, measured on the local monotonic clock). That is its *lease*: while it is
+valid the server may keep staking its players' balances, and when it expires
+(`LEASE_TIMEOUT`, 15 s) the game loop freezes new rounds — see
+[06 §6.7](06-distributed-systems.md#67-handling-the-partition-holder-side-lease-expiry).
+
 ## join.py — the HTTP door
 
 | Route | Behavior |

@@ -7,7 +7,8 @@ from flask import Blueprint, redirect, render_template, request, session
 from flask_login import UserMixin, current_user, login_required, login_user
 
 from central_server import auth, db
-from central_server.config import HEARTBEAT_TTL, INITIAL_BALANCE
+from central_server.config import (HEARTBEAT_TTL, INITIAL_BALANCE,
+                                   SEAT_TAKEOVER_TTL)
 
 web_bp = Blueprint('web', __name__)
 
@@ -106,7 +107,7 @@ def play():
 
     # One account, one table: claim the player's single seat before minting a
     # token for it, so the same balance cannot be staked on two servers at once.
-    if not db.take_seat(user.username, server.id, HEARTBEAT_TTL):
+    if not db.take_seat(user.username, server.id, SEAT_TAKEOVER_TTL):
         return _render_home(user, error='You are already seated at a table: leave it '
                                         '(or wait a few seconds) before playing again')
 

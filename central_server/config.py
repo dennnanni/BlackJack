@@ -23,6 +23,12 @@ JOIN_TOKEN_TTL = 120
 # this (3x the game servers' heartbeat interval, to forgive lost beats).
 HEARTBEAT_TTL = int(os.getenv('HEARTBEAT_TTL', '15'))
 
+# How long a silent game server keeps its players' seats. Must stay **above**
+# the game servers' LEASE_TIMEOUT (15 s): they stop staking balances when their
+# lease expires, and only then may central hand the same players to another
+# server. The margin covers one in-flight heartbeat and clock-rate drift.
+SEAT_TAKEOVER_TTL = int(os.getenv('SEAT_TAKEOVER_TTL', '30'))
+
 # Grace period for a freshly claimed seat: the dispatched player has this long
 # to actually land on the game server before a heartbeat that does not list
 # them yet releases their seat.

@@ -36,6 +36,11 @@
         <strong class="me">{{ username }}</strong> — balance: $<span id="balance">{{ balance }}</span>
     </div>
 
+    <div id="lease-banner" class="zone" style="display:none; border-color:#a33; color:#a33;">
+        ⚠ Connection to the central server lost — no new rounds can start until it is
+        back. You keep your seat and nothing is lost.
+    </div>
+
     <div id="status" class="zone">Connecting to the table…</div>
 
     <div class="zone dealer">
@@ -137,6 +142,21 @@
                 showBetControls(false);
                 setStatus("Bet placed. Waiting for the cards…");
             }
+        });
+
+        // The server may no longer stake balances: it froze the table rather
+        // than play rounds central cannot settle. Nobody is kicked.
+        socket.on("lease_expired", () => {
+            clearCountdown();
+            $("lease-banner").style.display = "";
+            setStatus("Paused: waiting for the central server.");
+            showBetControls(false);
+            showActions(false);
+        });
+
+        socket.on("lease_restored", () => {
+            $("lease-banner").style.display = "none";
+            setStatus("Central server is back — resuming play.");
         });
 
         socket.on("no_players_bet", () => {

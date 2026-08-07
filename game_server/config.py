@@ -16,6 +16,12 @@ CENTRAL_URL = os.getenv('CENTRAL_URL', 'http://localhost:5000')
 CAPACITY = int(os.getenv('CAPACITY', '10'))
 HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', '5'))
 
+# How long this server may keep staking its players' balances without central
+# confirming it. Must stay **below** central's SEAT_TAKEOVER_TTL (30 s), so
+# this server has stopped before central can give the same players' seats to
+# another one; the margin covers one in-flight heartbeat and clock-rate drift.
+LEASE_TIMEOUT = int(os.getenv('LEASE_TIMEOUT', '15'))
+
 # On-disk store for round results not yet acknowledged by central.
 OUTBOX_PATH = os.getenv('OUTBOX_PATH', 'outbox.db')
 

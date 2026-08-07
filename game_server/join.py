@@ -33,7 +33,14 @@ def verify_join_token(token, expected_server_id):
 
 @game_bp.route('/')
 def index():
-    return render_template('index.html')
+    # A refresh must not cost you the table: identity comes from the session
+    # POST /join stored, so the page comes back playable and the socket
+    # 'join' handler puts you back in your room mid-round.
+    username = session.get('username')
+    if username is None:
+        return render_template('index.html')
+    return render_template('index.html', username=username,
+                           balance=f"{session['balance']:.2f}")
 
 
 @game_bp.route('/join', methods=['POST'])

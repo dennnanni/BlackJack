@@ -8,7 +8,8 @@ import time
 import jwt
 import requests
 
-from game_server.config import CAPACITY, CENTRAL_URL, SHARED_SECRET
+from game_server.config import (CAPACITY, CENTRAL_URL, LEASE_TIMEOUT,
+                                SHARED_SECRET)
 from shared.messages import CAPACITY as CAPACITY_FIELD
 from shared.messages import HOST, PLAYERS, PORT, RESULTS, ROUND_ID, SERVER_ID
 
@@ -19,6 +20,24 @@ class CentralClient:
     def __init__(self, base_url):
         self.base_url = base_url
         self.server_id = None
+        # Elapsed time since central last confirmed us. The process refuses to
+        # start unless registration succeeds, so starting the clock at
+        # construction is honest. Monotonic: no clock sync with central is
+        # assumed anywhere, only local elapsed time.
+        self._last_contact = time.monotonic()
+
+    def lease_valid(self):
+        """True while this server may still stake its players' balances.
+
+        A join token is a *lease*: central let this server move a player's
+        money on the assumption that it can hear from us, and it will hand the
+        player's seat to another server once it cannot. A lease only the
+        grantor tracks is not a lease, so it expires here too — strictly
+        earlier than central reassigns the seat (LEASE_TIMEOUT <
+        SEAT_TAKEOVER_TTL), which is what stops two servers from believing at
+        the same time that they may stake the same balance.
+        """
+        return time.monotonic() - self._last_contact < LEASE_TIMEOUT
 
     def _bearer(self):
         now = int(time.time())
@@ -36,6 +55,7 @@ class CentralClient:
                                      headers=self._bearer(), timeout=5)
             response.raise_for_status()
             self.server_id = response.json()[SERVER_ID]
+            self._last_contact = time.monotonic()
             return True
         except (requests.RequestException, KeyError, ValueError) as e:
             print(f'[central] registration failed: {e}')
@@ -48,6 +68,11 @@ class CentralClient:
             response = requests.post(f'{self.base_url}/api/servers/heartbeat',
                                      json={PLAYERS: players},
                                      headers=self._bearer(), timeout=5)
+            if response.ok:
+                # Only a 200 renews the lease: a 404 means central is
+                # reachable but no longer holds our players' seats, which is
+                # exactly as bad as not reaching it at all.
+                self._last_contact = time.monotonic()
             return response.status_code
         except requests.RequestException:
             return None

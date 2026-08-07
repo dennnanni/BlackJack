@@ -59,16 +59,20 @@ simple (there is exactly one talker and one listener per link).
 - **Accounts, dispatch and balances of record** live on the central server — this is
   the **CP / source-of-truth** side. If central is down you cannot log in, cannot be
   dispatched to a new table, and the balance of record cannot change.
-- **In-progress gameplay** on a game server is **AP**: a round that has started keeps
-  running during a partition; finished rounds are buffered locally (on disk) and
-  delivered later.
+- **In-progress gameplay** on a game server is **AP, but only for the length of its
+  lease**: rounds keep running while central is unreachable, and finished rounds are
+  buffered locally (on disk) for delivery later. Once the lease expires (15 s without
+  central confirming a heartbeat) the server stops starting *new* rounds — it will
+  not stake balances it can no longer prove it is entitled to stake.
 - **Convergence** is eventual consistency done safely: results are **additive deltas**
   keyed by a unique **`round_id`**, delivered **at-least-once** and applied
   **exactly once** at central (an idempotency ledger deduplicates), so the final
   balance is correct regardless of retries, ordering or duplicates.
 
 The deliberate boundary: **during a partition, new players cannot join** (joining
-needs central to mint a token), but everyone already seated keeps playing. See
+needs central to mint a token), and everyone already seated keeps playing until the
+game server's lease expires, after which their table freezes and thaws by itself on
+heal. Bounded autonomy, not unlimited autonomy. See
 [06 — Distributed-Systems Mechanisms](06-distributed-systems.md).
 
 ## Repository layout
