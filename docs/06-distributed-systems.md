@@ -122,9 +122,17 @@ POST /play → take_seat(username, chosen_server, SEAT_TAKEOVER_TTL)
 Three properties worth noting:
 
 - **The mutual exclusion is the database's, not the application's.** Two simultaneous
-  `POST /play` requests for one account do not need a lock in Flask; the primary-key
-  conflict decides, and the loser is simply refused. This matters because central may
-  itself be run as several replicas.
+  `POST /play` requests for one account do not need a lock in Flask; the loser is
+  simply refused. This matters because central may itself be run as several replicas.
+  Note *which* database mechanism decides on *which* path, because it is not one
+  mechanism: an account with **no** seat is arbitrated by the **primary key** — both
+  inserts race, one gets an `IntegrityError` and is refused. An account whose seat is
+  being **taken over** from a dead server is a read-modify-write (read the row, see a
+  dead owner, rewrite `server_id`), and there the primary key decides nothing at all:
+  both updates would find the row present and both would commit, seating one account
+  at two tables. That path therefore reads the row **`FOR UPDATE`**, so the second
+  claim blocks and then sees the first one's write. A locking read on one path, a
+  uniqueness constraint on the other — the constraint alone is not enough.
 - **The lease is renewed by the party that knows.** Seats are not released on a timer
   by central, and not by an explicit "leave" call that a crashing browser would never
   send: each heartbeat carries the *complete* seat list of its sender, so a player
@@ -154,9 +162,9 @@ has an expiry — and a lease only the grantor tracks is not a lease, it is a ho
 the holder expires it too:
 
 ```
-game server, before starting each round:
+game server, before starting each round AND again before dealing:
     lease_valid()  ==  (time since central last ACKed a heartbeat) < LEASE_TIMEOUT
-    if not valid → emit lease_expired, freeze, re-check, resume when it returns
+    if not valid → cancel/freeze, re-check, resume when it returns
 ```
 
 **The safety condition is an inequality**, and it is the whole argument:
@@ -171,13 +179,47 @@ margin covers one in-flight heartbeat plus clock-rate drift; note that the game
 server measures **elapsed time on its own monotonic clock**, so no clock
 synchronisation between hosts is assumed anywhere in this design.
 
+### Where the check has to happen (the granularity trap)
+
+An inequality between two *timeouts* only protects anything if the check happens at
+the instant the protected action occurs. Checking the lease once at the top of each
+round does **not** qualify, and this is subtle enough to be worth stating plainly:
+
+```
+BET_WINDOW 35 s + 3 × TURN_WINDOW 30 s + dealer + pacing  ≈  140 s per round
+```
+
+A round is an order of magnitude longer than the 15 s gap between the two constants.
+So a lease checked only at the round boundary, and valid at that moment, would still
+let the table accept bets at *t = 30 s* — i.e. staking money 30 s after last contact,
+having declared its own limit to be 15 s, at the very moment central becomes willing
+to hand those seats away. The inequality would hold on paper and be violated in fact:
+**the constants were never the problem, the granularity was.**
+
+The fix is to check again at the last instant before the stakes become real — the
+**deal**. Bets collected during the window are not yet commitments, so a round
+cancelled between the window and the deal costs nobody anything (no cards shown, no
+result settled, nothing to void), and after it the outer loop freezes the table
+normally. The choke point is singular on purpose: every path that commits money runs
+through the deal, so one guard covers them all rather than one per entry point.
+
+With the check there, "this server never *begins* staking while its lease is dead"
+is true instant-by-instant, and the inequality means what it says. What remains
+outstanding across a takeover is at most the *already dealt* round — money committed
+while the lease was still valid — which is exactly the bounded exposure the section
+below quantifies, and exactly why finishing a dealt hand is still the right call.
+
 Freezing is deliberately gentle, because the point is to protect the money, not to
 punish the players:
 
-- the round **in progress is always finished** — dealt, settled, written to the
-  outbox as usual. Aborting a dealt hand is the one thing worse than continuing, and
-  its exposure is a single round;
-- only the **next** round is held back. The table, the seats and the sockets stay up;
+- a **dealt** round is always finished — settled and written to the outbox as usual.
+  Aborting a dealt hand is the one thing worse than continuing, and its exposure is a
+  single round;
+- a round that has only reached **betting** is cancelled instead, since a bet is not
+  a stake until the cards go down: nothing is voided because nothing had happened yet.
+  This is the `deal`-time check above, and it is what keeps "dealt" the *only* thing
+  that can still be outstanding when the lease dies;
+- the **next** round is held back. The table, the seats and the sockets stay up;
   the UI shows "connection to the central server lost — no new rounds";
 - when a heartbeat is ACKed again the loop emits `lease_restored` and play resumes by
   itself. No kick, no re-dispatch, no page reload, nothing voided.

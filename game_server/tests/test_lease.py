@@ -34,9 +34,51 @@ def test_lease_expires_when_central_goes_silent():
 def test_lease_timeout_is_shorter_than_the_seat_takeover():
     """The safety inequality: this server must give up before central gives
     the same players away, or both would consider themselves entitled to stake
-    the same balance."""
+    the same balance.
+
+    The inequality is only meaningful because the lease is checked at the
+    instant stakes are committed (the deal) — see the test below. Checked only
+    once per round, it would say nothing: a round is far longer than the gap
+    between the two constants.
+    """
     from central_server.config import SEAT_TAKEOVER_TTL
     assert LEASE_TIMEOUT < SEAT_TAKEOVER_TTL
+
+
+def test_a_lease_lost_during_the_betting_window_cancels_before_the_deal(loop_env, monkeypatch):  # noqa: F811
+    """The betting window is tens of seconds long, so a lease still valid when
+    the round opened can be dead by the time the cards would go down. Bets are
+    not stakes until the deal, so the round is cancelled and nothing is staked.
+    """
+    sio, box = loop_env
+    central = FakeCentral(valid=True)
+    monkeypatch.setattr(loop_module, 'client', central)
+    monkeypatch.setattr(loop_module, 'LEASE_CHECK_SECONDS', 0.05)
+
+    table = Table('t-lease-window')
+    table.add_user(User('u1', 1000))
+    table.add_user(User('u2', 1000))
+
+    gl = loop_module.GameLoop(table)
+    gl.start()
+    try:
+        sio.wait_for('place_bets')          # lease was valid: the round opened
+        game = table.game
+        for u in list(game.active_users):
+            game.place_bet(u, 10)
+
+        central.valid = False               # the link drops mid-window
+        gl.bets_done_event.set()
+
+        # No cards are dealt and no result is settled: nothing was staked.
+        sio.wait_for('lease_expired')
+        assert sio.all('initial_cards') == []
+        assert box.enqueued == []
+    finally:
+        for u in list(table.users):
+            table.remove_user(u)
+        gl.bets_done_event.set()
+        gl.join(timeout=3)
 
 
 def test_frozen_table_starts_no_round_and_resumes_on_its_own(loop_env, monkeypatch):  # noqa: F811

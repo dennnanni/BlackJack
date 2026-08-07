@@ -110,6 +110,18 @@ class GameLoop(Thread):
             self._end_round()
             return
 
+        # 1b. Re-check the lease *here*, at the last instant before the stakes
+        #     become real. Checking only at the top of the round was not
+        #     enough: a betting window is 35 s, so a lease that died just after
+        #     that check would still have let this table stake money well past
+        #     LEASE_TIMEOUT — and past the moment central may hand these seats
+        #     to another server. Bets are only committed by the deal, so
+        #     cancelling here costs nobody anything; the outer loop then
+        #     freezes the table as usual.
+        if not client.lease_valid():
+            self._end_round()
+            return
+
         # 2. Initial deal: two cards to every player who bet, then the dealer's
         #    upcard — face up, so players decide against something rather than
         #    against nothing. No hole card: the dealer draws the rest in step 4.
