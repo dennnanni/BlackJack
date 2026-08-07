@@ -35,6 +35,9 @@ class GameLoop(Thread):
         # currently waiting on; the handler reads it to enforce turn order.
         self.turn_done_event = Event()
         self.current_player = None
+        # Which phase the round is in, for clients that (re)join mid-round and
+        # have to be told what they missed.
+        self.betting_open = False
         self.room_id = f"table-{table.id}"
 
     def run(self):
@@ -78,7 +81,9 @@ class GameLoop(Thread):
         # 1. Betting: players opt in by placing a bet within the window. Whoever
         #    does not bet simply sits the round out and stakes nothing.
         socketio.emit('place_bets', {'table': table_id}, to=self.room_id)
+        self.betting_open = True
         self.bets_done_event.wait(timeout=BET_WINDOW_SECONDS)
+        self.betting_open = False
         for user in self.table.users:
             if not game.bets.get(user):
                 game.remove_active_user(user)
@@ -87,7 +92,7 @@ class GameLoop(Thread):
             # Nobody opted in: cancel and immediately offer a fresh betting
             # round (the outer loop restarts us). No reload needed.
             socketio.emit('no_players_bet', {'table': table_id}, to=self.room_id)
-            self.table.clear_game()
+            self._end_round()
             return
 
         # 2. Initial deal: two cards to every player who bet.
@@ -136,7 +141,16 @@ class GameLoop(Thread):
         # 6. Give players time to take in the outcome and the final hands, then
         #    tear the round down; the while-loop starts the next one.
         socketio.sleep(ROUND_RESULT_DELAY)
+        self._end_round()
+
+    def _end_round(self):
+        """Tear the round down and let the next one start: observers become
+        players, and players whose socket never came back give up their seat
+        (between rounds is the only moment where dropping them costs nobody
+        anything)."""
+        from game_server.events import reap_absent  # circular at import time
         self.table.clear_game()
+        reap_absent(self.table)
 
     def _run_turn(self, game, user):
         """Give one player the table until they stand, double, bust or time out."""

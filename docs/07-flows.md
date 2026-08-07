@@ -31,10 +31,13 @@ Browser                Central                              Game server 2
   │ POST http://host2:port2/join {token} ──────────────────────▶│ verify sig
   │                                                             │ server_id == 2? ✓
   │                                                             │ session[u, balance]
-  │ ◀── index.html (game UI) ───────────────────────────────────│
+  │ ◀── 302 to GET / ───────────────────────────────────────────│ (so F5 never
+  │ GET / ─────────────────────────────────────────────────────▶│  re-spends the
+  │ ◀── index.html (game UI) ───────────────────────────────────│  one-shot token)
   │ Socket.IO connect (cookie carries the session) ────────────▶│
   │ emit join  ────────────────────────────────────────────────▶│ seat at a table,
   │ ◀── joined {table_id, is_player} ───────────────────────────│ start GameLoop
+  │ ◀── board + current phase (on a reload: what you missed) ───│
 ```
 
 If no live game server exists (all partitions/down/full), `/play` re-renders home
@@ -98,7 +101,9 @@ Sender thread                          Central
   auto-stands them at the action timeout, their delta is still computed, enqueued and
   delivered; they are unseated on the next disconnect-aware pass (or rejoin and
   continue).
-- Player refreshes the page → same session cookie, `join` finds them already seated
-  and reattaches to the same table room.
+- Player refreshes the page → the page is a plain GET rendered from the session
+  cookie, `join` finds them already seated, reattaches them to the table room and
+  replays the round's current state (board, betting window or their own turn, freeze
+  banner). Nothing is lost and no new token is needed.
 
 Next: [08 — Running & Testing](08-running-and-testing.md).

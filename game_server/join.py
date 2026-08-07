@@ -2,7 +2,8 @@
 central server dispatches a player with a signed join token.
 """
 import jwt
-from flask import Blueprint, jsonify, render_template, request, session
+from flask import (Blueprint, jsonify, redirect, render_template, request,
+                   session, url_for)
 
 from game_server.central_client import client
 from game_server.config import SHARED_SECRET
@@ -31,30 +32,56 @@ def verify_join_token(token, expected_server_id):
     return payload
 
 
+def _live_balance(username):
+    """The balance the table is playing with — it moves every round, while the
+    session only holds the snapshot the join token carried."""
+    from game_server.events import last_balance, user_map
+    user = user_map.get(username)
+    if user:
+        return user.balance
+    return last_balance.get(username, session['balance'])
+
+
 @game_bp.route('/')
 def index():
-    # A refresh must not cost you the table: identity comes from the session
-    # POST /join stored, so the page comes back playable and the socket
-    # 'join' handler puts you back in your room mid-round.
+    # The table page lives at a GET url so reloading it is always safe: the
+    # identity comes from the session that /join stored, and the socket 'join'
+    # handler puts the player back into their room and round.
     username = session.get('username')
     if username is None:
         return render_template('index.html')
     return render_template('index.html', username=username,
-                           balance=f"{session['balance']:.2f}")
+                           balance=f"{_live_balance(username):.2f}")
 
 
 @game_bp.route('/join', methods=['POST'])
 def join():
+    """Consume a one-shot join token, then redirect to the table page.
+
+    POST/redirect/GET on purpose: the token is valid for two minutes and can
+    only be spent once, so if the *response* to this POST were the table page
+    itself, every F5 would re-submit the spent token and answer with an error
+    instead of the game. After the redirect the browser sits on `/`, where a
+    reload is an ordinary GET.
+    """
     token = request.form.get('token')
-    if not token:
-        return jsonify({'error': 'Token is required'}), 400
     try:
+        if not token:
+            raise JoinError('Token is required', 400)
         payload = verify_join_token(token, client.server_id)
     except JoinError as e:
+        # A spent or missing token is harmless for a browser that already
+        # holds a session here (a re-submitted dispatch form, a back button):
+        # it was let in by a valid token earlier, so send it to its table.
+        if session.get('username'):
+            return redirect(url_for('game.index'))
         return jsonify({'error': str(e)}), e.status
 
     # Identity and balance come from the signed token, never from the client.
     session['username'] = payload['sub']
     session['balance'] = float(payload['balance'])
-    return render_template('index.html', username=payload['sub'],
-                           balance=f"{session['balance']:.2f}")
+    session.permanent = True
+
+    from game_server.events import last_balance
+    last_balance.pop(payload['sub'], None)  # central just told us the truth
+    return redirect(url_for('game.index'))

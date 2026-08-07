@@ -32,17 +32,32 @@ valid the server may keep staking its players' balances, and when it expires
 
 | Route | Behavior |
 |---|---|
-| `GET /` | informational page ("join through the central server") |
-| `POST /join` | form field `token` = the join-JWT minted by central |
+| `GET /` | the table page if this browser has a session here, otherwise an informational page ("join through the central server") |
+| `POST /join` | form field `token` = the join-JWT minted by central; **redirects to `GET /`** |
 
 `verify_join_token` decodes the token with the `SHARED_SECRET` and rejects it (401)
 if invalid/expired, or (403) if its `server_id` claim doesn't match **this** server's
 id — a token minted for server 1 opens no doors on server 2.
 
 On success the username and balance **from the token** are stored in the Flask
-session, and the game UI (`index.html`) is rendered. The client never supplies its
-own identity or balance anywhere — this closed a real hole in the pre-refactor
-system, where the browser sent its own `balance` in the Socket.IO `join` event.
+session. The client never supplies its own identity or balance anywhere — this
+closed a real hole in the pre-refactor system, where the browser sent its own
+`balance` in the Socket.IO `join` event.
+
+### Reloading the page is always safe
+
+A join token is single-use and short-lived, so the table page must not *be* the
+response to `POST /join`: F5 would re-submit a spent token and answer with an error
+where the game used to be. Hence **POST/redirect/GET** — the browser ends up on `/`,
+where reloading is an ordinary GET rendered from the session. A re-submitted stale
+token is not an error either: a browser that already holds a session here was let in
+by a valid token once, so it is redirected to its table.
+
+The reload then costs nothing but the events the socket missed, and those are
+replayed on reconnect (`_resume`): the board, the phase (`place_bets` if the betting
+window is still open and you have not bet, `turn_started` if the loop is waiting on
+*you*) and the freeze banner if the lease has expired. The balance shown is the one
+the table is playing with, not the older snapshot the token carried.
 
 ## events.py — Socket.IO events
 
@@ -51,7 +66,7 @@ event derives the player from `session['username']`.
 
 | Event (in) | Payload | Effect |
 |---|---|---|
-| `join` | — | seat the player: `TableManager` puts them at a table with space (max 3 per table), or as an **observer** of a running game, or opens a new table. Starts a `GameLoop` thread if the table is ready. A player already seated (page refresh) simply rejoins their room and is sent the current board. |
+| `join` | — | seat the player: `TableManager` puts them at a table with space (max 3 per table), or as an **observer** of a running game, or opens a new table. Starts a `GameLoop` thread if the table is ready. A player already seated (page refresh) simply rejoins their room and is replayed the current state of the round. |
 | `bet` | `{amount}` | opt into the round by staking `amount`; when the last active player has bet, wakes the loop early. Skip it and you simply sit the round out — you stake nothing. |
 | `player_action` | `{action: hit\|stand\|double}` | applies the action **only if it is your turn** (the loop hands the table to one player at a time); emits the resulting cards/busts. A plain `hit` keeps your turn; `stand`, `double` or a bust ends it and the loop moves to the next player. |
 | `disconnect` | — | if the player is *not* mid-round, they are unseated: the load drops and the next heartbeat no longer lists them, which releases their seat at central so they can play again elsewhere. Mid-round players stay: the round auto-stands them on timeout and their result is still reported. |
