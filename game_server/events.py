@@ -57,6 +57,30 @@ def unseat(username):
     sitting_out.discard(username)
 
 
+def leave_table(username):
+    """A player pressed "Leave table".
+
+    They give up their seat at once — no waiting for a timeout, no ghost at
+    the table — but a stake already on the felt is *lost*: the round is still
+    played out and settled, so the money is accounted for at central exactly
+    like any other round. Walking out is not a way to cancel a losing hand.
+    """
+    from game_server.app import socketio   # circular at import time
+
+    user = user_map.get(username)
+    if user is None:
+        return
+    table = table_manager.get_user_table(username)
+    game = table.game if table else None
+    if game and user in game.get_users():
+        game.forfeit(user)
+        game_loop = table_game_map.get(table.id)
+        if game_loop and game_loop.current_player is user:
+            game_loop.turn_done_event.set()   # don't hold the table for them
+        socketio.emit('player_left', {'user': username}, to=_room(table))
+    unseat(username)
+
+
 def reap_absent(table):
     """Called by the loop between rounds: unseat the players of this table
     whose socket never came back."""

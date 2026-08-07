@@ -6,7 +6,7 @@ from flask import (Blueprint, jsonify, redirect, render_template, request,
                    session, url_for)
 
 from game_server.central_client import client
-from game_server.config import SHARED_SECRET
+from game_server.config import CENTRAL_PUBLIC_URL, SHARED_SECRET
 
 game_bp = Blueprint('game', __name__)
 
@@ -51,7 +51,20 @@ def index():
     if username is None:
         return render_template('index.html')
     return render_template('index.html', username=username,
-                           balance=f"{_live_balance(username):.2f}")
+                           balance=f"{_live_balance(username):.2f}",
+                           central_url=CENTRAL_PUBLIC_URL)
+
+
+@game_bp.route('/leave', methods=['POST'])
+def leave():
+    """Give up the seat and go back to central. POST, not a link: it changes
+    state, and a prefetched GET must never throw a player off their table."""
+    username = session.get('username')
+    if username:
+        from game_server.events import leave_table
+        leave_table(username)
+    session.clear()
+    return redirect(CENTRAL_PUBLIC_URL)
 
 
 @game_bp.route('/join', methods=['POST'])

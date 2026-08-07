@@ -39,6 +39,7 @@ services:
       SERVER_HOST: localhost   # address the browser uses to reach this server
       SERVER_PORT: "8001"
       CENTRAL_URL: http://central:5000
+      CENTRAL_PUBLIC_URL: http://localhost:16000   # where "leave table" sends the browser
       OUTBOX_PATH: /data/outbox.db
       PYTHONUNBUFFERED: "1"
     env_file: .env
@@ -59,6 +60,7 @@ services:
       SERVER_HOST: localhost
       SERVER_PORT: "8002"
       CENTRAL_URL: http://central:5000
+      CENTRAL_PUBLIC_URL: http://localhost:16000   # where "leave table" sends the browser
       OUTBOX_PATH: /data/outbox.db
       PYTHONUNBUFFERED: "1"
     env_file: .env

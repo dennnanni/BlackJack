@@ -14,6 +14,11 @@ CENTRAL_URL = os.getenv('CENTRAL_URL', 'http://localhost:5000')
 
 # Max players this server accepts; reported to central at registration.
 CAPACITY = int(os.getenv('CAPACITY', '10'))
+
+# Where "leave table" sends the browser. CENTRAL_URL is how *this process*
+# reaches central (a docker-internal name in compose), which the browser
+# cannot necessarily resolve — so it is only a fallback.
+CENTRAL_PUBLIC_URL = os.getenv('CENTRAL_PUBLIC_URL', CENTRAL_URL)
 HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', '5'))
 
 # How long this server may keep staking its players' balances without central

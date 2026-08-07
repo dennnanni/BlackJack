@@ -19,6 +19,17 @@
         button:disabled { opacity: .5; cursor: not-allowed; }
         #actions { display: none; }
         #bet-controls { display: none; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+        button.danger { background: #a11; color: #fff; border: 1px solid #d33; border-radius: 6px;
+                        padding: 8px 14px; font-size: 1em; cursor: pointer; }
+        .backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
+                    align-items: center; justify-content: center; padding: 20px; }
+        .backdrop.open { display: flex; }
+        .modal { background: #21402f; border: 1px solid #4a7a5d; border-radius: 10px;
+                 padding: 20px 24px; max-width: 460px; }
+        .modal h3 { margin-top: 0; }
+        .modal button { margin-right: 8px; font-size: 1em; padding: 8px 14px; }
+        .warn { color: #ffb3b3; font-weight: bold; }
         #log { font-size: .9em; max-height: 180px; overflow-y: auto; opacity: .85; }
         #log div { border-bottom: 1px solid rgba(255,255,255,.1); padding: 2px 0; }
     </style>
@@ -32,8 +43,21 @@
         <p>This is a Blackjack game server. Join a table through the central server.</p>
     </div>
     {% else %}
-    <div class="zone">
-        <strong class="me">{{ username }}</strong> — balance: $<span id="balance">{{ balance }}</span>
+    <div class="zone topbar">
+        <span><strong class="me">{{ username }}</strong> — balance: $<span id="balance">{{ balance }}</span></span>
+        <button id="leave-button" class="danger" onclick="askLeave()">Leave table</button>
+    </div>
+
+    <div id="leave-modal" class="backdrop">
+        <div class="modal">
+            <h3>Leave the table?</h3>
+            <p id="leave-warning"></p>
+            <p>You will go back to the central server, where your balance of record is kept.</p>
+            <form method="post" action="{{ url_for('game.leave') }}">
+                <button class="danger" type="submit">Yes, leave the table</button>
+                <button type="button" onclick="closeLeave()">Stay</button>
+            </form>
+        </div>
     </div>
 
     <div id="lease-banner" class="zone" style="display:none; border-color:#a33; color:#a33;">
@@ -120,6 +144,15 @@
         function toggleSit() {
             socket.emit("sit_out", { sitting_out: !sittingOut });
         }
+        // Leaving mid-round forfeits the stake, so say so before doing it.
+        function askLeave() {
+            $("leave-warning").innerHTML = myBet > 0
+                ? `<span class="warn">You have $${myBet} on this hand. Leaving now loses it,
+                   whatever the cards would have said.</span>`
+                : "You have nothing staked on this hand.";
+            $("leave-modal").classList.add("open");
+        }
+        function closeLeave() { $("leave-modal").classList.remove("open"); }
 
         socket.on("connect", () => socket.emit("join"));
 
@@ -233,6 +266,10 @@
             if (data.user === me) { setStatus("Busted! Waiting for the round to finish…"); showActions(false); }
         });
 
+        socket.on("player_left", data => {
+            log(`${data.user} left the table (stake forfeited)`);
+        });
+
         socket.on("user_stood", data => {
             log(`${data.user} stands`);
             if (data.user === me) { setStatus("Standing. Waiting for your turn to end…"); showActions(false); }
@@ -282,6 +319,7 @@
                     myOutcome = outcome;
                 }
             }
+            myBet = 0;   // nothing is staked between rounds
             const base = myOutcome ? `Round over: you ${myOutcome}.` : "Round over.";
             startCountdown(data.next_round_in || 0, base);
         });

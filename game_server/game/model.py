@@ -54,6 +54,7 @@ class Game:
         self.active_users: list[User] = players
         self.bets: dict[User, float] = {}
         self.finished_users: list[User] = []
+        self.forfeited: list[User] = []
         self.deck = deck
 
     def get_users(self):
@@ -88,6 +89,8 @@ class Game:
         return results
 
     def _determine_difference(self, user):
+        if user in self.forfeited:
+            return -self.bets[user]
         if Hand.is_busted(user.hand):
             return -self.bets[user]
         if self._is_winner(user):
@@ -121,6 +124,13 @@ class Game:
         return card
 
     def player_stand(self, user):
+        self.remove_active_user(user)
+
+    def forfeit(self, user):
+        """The user walked away mid-round: they take no further part in it and
+        lose their stake whatever the cards would have said. The result is
+        still computed and reported — the money must be accounted for."""
+        self.forfeited.append(user)
         self.remove_active_user(user)
 
     def remove_active_user(self, user):
