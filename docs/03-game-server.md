@@ -89,13 +89,14 @@ empty one) never needs a page reload. Per round:
    until every seated player has bet. Betting is **opt-in**: players who didn't bet
    are excluded from the round and stake nothing. If nobody bet, the loop emits
    `no_players_bet` and simply offers a fresh betting round (it does **not** stop).
-2. Deal two cards to each player who bet, emit `initial_cards`.
+2. Deal two cards to each player who bet **and the dealer's upcard** (face up, no
+   hole card), emit `initial_cards` (`{hands, dealer_cards}`).
 3. **Turn by turn**, the loop hands the table to one player at a time: it emits
    `turn_started {user}` and waits up to **30 s** (`TURN_WINDOW_SECONDS`) for that
    player to `stand`, `double` or bust (a `hit` that doesn't bust keeps their turn).
    A hand already worth 21 is stood automatically; a player who runs out the clock is
    **auto-stood**. Only then does the next player's turn begin.
-4. Dealer draws to 17, revealing **one card at a time** (`dealer_turn`, then a
+4. Dealer draws to 17 **from the upcard**, revealing **one card at a time** (`dealer_turn`, then a
    `dealer_card` per draw with a short delay between) and finally `dealer_done`.
 5. `game.determine_result()` computes each player's **balance delta**
    (win = +bet, loss/bust = −bet, push = 0, blackjack beats a non-blackjack 21).

@@ -288,7 +288,8 @@
 
         socket.on("dealer_turn", () => {
             clearTurnHighlight();
-            $("dealer-cards").innerHTML = "";
+            // Not cleared: the upcard has been on the table since the deal, and
+            // dealer_card appends the rest to it.
             setStatus("Dealer's turn — drawing…");
         });
 

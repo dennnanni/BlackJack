@@ -110,15 +110,19 @@ class GameLoop(Thread):
             self._end_round()
             return
 
-        # 2. Initial deal: two cards to every player who bet.
+        # 2. Initial deal: two cards to every player who bet, then the dealer's
+        #    upcard — face up, so players decide against something rather than
+        #    against nothing. No hole card: the dealer draws the rest in step 4.
         for user in game.active_users:
             user.clear_hand()
             user.add_card(deck.draw_card())
             user.add_card(deck.draw_card())
+        game.add_dealer_card(deck.draw_card())
         socketio.emit('initial_cards', {
             'table': table_id,
             'hands': {u.username: [str(c) for c in u.hand]
-                      for u in game.active_users}
+                      for u in game.active_users},
+            'dealer_cards': [str(c) for c in game.dealer_hand]
         }, to=self.room_id)
 
         # 3. Player turns: strictly one player at a time until they are done.
@@ -126,8 +130,8 @@ class GameLoop(Thread):
             self._run_turn(game, user)
         self.current_player = None
 
-        # 4. Dealer completes their hand (draw to 17), revealed one card at a
-        #    time so players can watch it build up.
+        # 4. Dealer completes their hand from the upcard (draw to 17), revealed
+        #    one card at a time so players can watch it build up.
         socketio.sleep(PRE_DEALER_DELAY)
         socketio.emit('dealer_turn', {'table': table_id}, to=self.room_id)
         while Hand.get_hand_value(game.dealer_hand) < Game.DEALER_STAND_VALUE:

@@ -52,12 +52,12 @@ tables at once.
 GameLoop (server thread)                     Players (via Socket.IO)
   │ emit game_starting, place_bets              │
   │ wait ≤35s ◀───────────────── emit bet {amount}   (opt-in; skip = sit out)
-  │ deal 2 cards to each bettor, emit initial_cards  │
+  │ deal 2 cards to each bettor + dealer upcard, emit initial_cards │
   │ for each player, in turn:                   │
   │   emit turn_started {user}                  │
   │   wait ≤30s ◀──────────── emit player_action {hit|stand|double}
   │     (hit keeps the turn; stand/double/bust ends it; timeout = auto-stand)
-  │ dealer draws to 17, one card at a time:      │
+  │ dealer draws to 17 from the upcard, one card at a time: │
   │   emit dealer_turn, then dealer_card + short pause per card, then dealer_done
   │ compute results (deltas)                    │
   │ OUTBOX.enqueue(round_id, results)  ← on disk *before* anything else

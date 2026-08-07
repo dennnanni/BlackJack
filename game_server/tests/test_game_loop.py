@@ -69,11 +69,12 @@ class StackedDeck:
 
 
 def _scripted_round():
-    # Deal order is u1,u1,u2,u2 then the dealer draws to 17.
+    # Deal order is u1,u1,u2,u2, the dealer's upcard, then the dealer draws to 17.
     return StackedDeck([
         Card('10', 'Spades'), Card('7', 'Spades'),    # u1 -> 17
         Card('10', 'Hearts'), Card('8', 'Hearts'),    # u2 -> 18
-        Card('10', 'Clubs'), Card('9', 'Clubs'),      # dealer -> 19
+        Card('10', 'Clubs'),                          # dealer upcard, dealt face up
+        Card('9', 'Clubs'),                           # dealer draws -> 19
     ])
 
 
@@ -112,6 +113,10 @@ def test_turn_based_round_then_automatic_restart(loop_env):
             game.place_bet(u, 10)
         gl.bets_done_event.set()
 
+        # The dealer's upcard is on the table before anyone acts, so players
+        # decide knowing what they are up against.
+        assert sio.wait_for('initial_cards')['dealer_cards'] == [str(Card('10', 'Clubs'))]
+
         # u1 gets the table first, alone.
         t1 = sio.wait_for('turn_started', after=0)
         assert t1['user'] == 'u1'
@@ -128,8 +133,9 @@ def test_turn_based_round_then_automatic_restart(loop_env):
 
         # Dealer completes and the round settles — revealed one card at a time.
         dealer = sio.wait_for('dealer_done')
-        assert len(dealer['cards']) == 2  # 10 then 9 -> 19
-        assert len(sio.all('dealer_card')) == 2  # each card announced on its own
+        assert len(dealer['cards']) == 2  # upcard 10 then 9 -> 19
+        # Only the cards drawn *after* the upcard, each announced on its own.
+        assert len(sio.all('dealer_card')) == 1
         results = sio.wait_for('round_results')['results']
         assert {r['username'] for r in results} == {'u1', 'u2'}
         assert all(r['balance_difference'] == -10 for r in results)  # 17,18 < 19
