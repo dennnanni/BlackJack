@@ -15,7 +15,7 @@
         .me { color: #ffd966; }
         .turn { outline: 2px solid #ffd966; border-radius: 6px; padding: 4px 8px; }
         #status { font-size: 1.1em; margin-bottom: 14px; }
-        #actions button, #bet-controls button, #bet-controls input { font-size: 1em; padding: 8px 14px; margin-right: 6px; }
+        #actions button, #bet-controls button, #bet-controls input, #sit-toggle { font-size: 1em; padding: 8px 14px; margin-right: 6px; }
         button:disabled { opacity: .5; cursor: not-allowed; }
         #actions { display: none; }
         #bet-controls { display: none; }
@@ -63,6 +63,7 @@
             <button onclick="sendAction('stand')">Stand</button>
             <button id="double-button" onclick="sendAction('double')">Double down</button>
         </span>
+        <button id="sit-toggle" onclick="toggleSit()">Sit out</button>
     </div>
 
     <div class="zone">
@@ -75,6 +76,7 @@
         const me = "{{ username }}";
         let balance = parseFloat("{{ balance }}");
         let myBet = 0;
+        let sittingOut = false;
         let countdownTimer = null;
         const socket = io();
 
@@ -113,6 +115,11 @@
         function sendAction(action) {
             socket.emit("player_action", { action });
         }
+        // Sitting out is a standing choice, not a per-round one: the table
+        // stops dealing you in (and stops waiting for you) until you sit in.
+        function toggleSit() {
+            socket.emit("sit_out", { sitting_out: !sittingOut });
+        }
 
         socket.on("connect", () => socket.emit("join"));
 
@@ -130,9 +137,34 @@
         });
 
         socket.on("place_bets", () => {
-            setStatus("Place your bet to join this round — or sit it out and stake nothing.");
             showActions(false);
+            if (sittingOut) {
+                setStatus("You are sitting out. Press “Sit in” to play the next round.");
+                showBetControls(false);
+                return;
+            }
+            setStatus("Place your bet to join this round — or sit it out and stake nothing.");
             showBetControls(true);
+        });
+
+        socket.on("seat_state", data => {
+            sittingOut = data.sitting_out;
+            $("sit-toggle").innerText = sittingOut ? "Sit in" : "Sit out";
+            if (sittingOut) { showBetControls(false); showActions(false); }
+            if (data.applies_now) {
+                setStatus(sittingOut ? "Sitting out — the table will not wait for you."
+                                     : "You are in: betting on the next deal.");
+            } else {
+                setStatus(sittingOut ? "You will sit out from the next round; finish this one first."
+                                     : "You will play again from the next round.");
+            }
+        });
+
+        socket.on("table_idle", () => {
+            clearCountdown();
+            showBetControls(false);
+            showActions(false);
+            setStatus("Everyone at the table is sitting out. Press “Sit in” to start a round.");
         });
 
         socket.on("bet_confirmed", data => {

@@ -128,6 +128,14 @@ class Game:
             self.active_users.remove(user)
             self.finished_users.append(user)
 
+    def restore_active_user(self, user):
+        """Put a user back in the round — only meaningful before the deal
+        (a player who sat out and changed their mind during the betting
+        window)."""
+        if user in self.finished_users:
+            self.finished_users.remove(user)
+            self.active_users.append(user)
+
 
 class User:
     def __init__(self, username, balance):

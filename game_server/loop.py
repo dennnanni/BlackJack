@@ -22,6 +22,7 @@ POST_DEALER_DELAY = 2.0     # let the finished dealer hand sink in
 ROUND_RESULT_DELAY = 7     # show the outcome and final hands before the table resets
 
 LEASE_CHECK_SECONDS = 1    # how often a frozen table re-checks the lease
+IDLE_ROUND_SECONDS = 3     # pause when every player at the table is sitting out
 
 
 class GameLoop(Thread):
@@ -77,6 +78,20 @@ class GameLoop(Thread):
         deck = Deck()
         game = Game(self.table.users[:], deck)
         self.table.game = game
+
+        # Players who asked to sit out are not in this round at all, so the
+        # table never waits on them.
+        from game_server.events import sitting_out  # circular at import time
+        for user in self.table.users:
+            if user.username in sitting_out:
+                game.remove_active_user(user)
+
+        if not game.active_users:
+            # Nobody is playing: idle instead of spinning through empty rounds.
+            socketio.emit('table_idle', {'table': table_id}, to=self.room_id)
+            socketio.sleep(IDLE_ROUND_SECONDS)
+            self._end_round()
+            return
 
         # 1. Betting: players opt in by placing a bet within the window. Whoever
         #    does not bet simply sits the round out and stakes nothing.

@@ -148,6 +148,68 @@ def test_turn_based_round_then_automatic_restart(loop_env):
     assert not gl.running
 
 
+def test_a_player_sitting_out_is_not_dealt_in_nor_waited_for(loop_env):
+    """The point of sitting out: the others do not sit through the betting
+    window waiting for someone who is not playing."""
+    import game_server.events as events
+    sio, box = loop_env
+    player, sitter = User('player', 1000), User('sitter', 1000)
+    table = Table('t3')
+    table.add_user(player)
+    table.add_user(sitter)
+    events.sitting_out.add('sitter')
+
+    gl = loop_module.GameLoop(table)
+    gl.start()
+    try:
+        sio.wait_for('place_bets')
+        game = table.game
+        assert list(game.active_users) == [player]
+        game.place_bet(player, 10)
+        # Nobody else to wait for, so the table can deal immediately.
+        assert game.all_players_have_bet()
+        gl.bets_done_event.set()
+
+        hands = sio.wait_for('initial_cards')['hands']
+        assert 'sitter' not in hands
+        assert [t['user'] for t in sio.all('turn_started')] == ['player']
+        game.player_stand(gl.current_player)
+        gl.turn_done_event.set()
+
+        results = sio.wait_for('round_results')['results']
+        assert [r['username'] for r in results] == ['player']
+    finally:
+        events.sitting_out.discard('sitter')
+        for u in list(table.users):
+            table.remove_user(u)
+        gl.bets_done_event.set()
+        gl.turn_done_event.set()
+        gl.join(timeout=3)
+
+
+def test_a_table_where_everyone_sits_out_idles_instead_of_dealing(loop_env):
+    import game_server.events as events
+    sio, box = loop_env
+    sitter = User('sitter', 1000)
+    table = Table('t4')
+    table.add_user(sitter)
+    events.sitting_out.add('sitter')
+    monkeyed = loop_module.IDLE_ROUND_SECONDS
+    loop_module.IDLE_ROUND_SECONDS = 0
+
+    gl = loop_module.GameLoop(table)
+    gl.start()
+    try:
+        sio.wait_for('table_idle')
+        assert 'place_bets' not in sio.names()
+    finally:
+        loop_module.IDLE_ROUND_SECONDS = monkeyed
+        events.sitting_out.discard('sitter')
+        for u in list(table.users):
+            table.remove_user(u)
+        gl.join(timeout=3)
+
+
 def test_players_who_do_not_bet_stake_nothing(loop_env):
     sio, box = loop_env
     u1 = User('better', 1000)

@@ -27,6 +27,12 @@ last_balance = {}
 # it is on for a whole betting window) for as long as the server runs.
 absent = set()
 
+# Players who asked to skip rounds. Sitting out is not the same as not
+# betting: the loop does not deal them in and, above all, does not wait on
+# them, so the rest of the table starts as soon as *they* have bet instead of
+# sitting through the whole betting window.
+sitting_out = set()
+
 
 def seated_players():
     """Usernames currently seated on this server (reported to central: it is
@@ -48,6 +54,7 @@ def unseat(username):
     table_manager.remove_user(user)
     last_balance[username] = user.balance
     absent.discard(username)
+    sitting_out.discard(username)
 
 
 def reap_absent(table):
@@ -67,6 +74,7 @@ def _resume(table, username):
     table.
     """
     game_loop = table_game_map.get(table.id)
+    emit('seat_state', {'sitting_out': username in sitting_out, 'applies_now': True})
     if game_loop and not client.lease_valid():
         emit('lease_expired', {'table': table.id})
 
@@ -134,6 +142,40 @@ def register_event_handlers(socketio):
                 emit('joined', {'table_id': table.id, 'is_player': False}, to=_room(table))
 
         _resume(table, username)
+
+    @socketio.on('sit_out')
+    def handle_sit_out(data):
+        """Toggle sitting out. The flag can be set at any time but only takes
+        effect at a round boundary: nobody is pulled out of a hand they have
+        already been dealt, and nobody is dealt into one already running."""
+        username = _session_user()
+        if username is None:
+            return
+        user = user_map.get(username)
+        table = table_manager.get_user_table(username)
+        if not user or not table:
+            emit('error', {'message': 'User not at any table'})
+            return
+
+        out = bool(data.get('sitting_out'))
+        sitting_out.add(username) if out else sitting_out.discard(username)
+
+        game, game_loop = table.game, table_game_map.get(table.id)
+        # Only the betting window is early enough to change the round that is
+        # already on the table; after that the change waits for the next one.
+        applies_now = not game or (game_loop is not None and game_loop.betting_open)
+        emit('seat_state', {'sitting_out': out, 'applies_now': applies_now})
+        if not applies_now or not game:
+            return
+
+        if out:
+            game.bets.pop(user, None)
+            game.remove_active_user(user)
+        else:
+            game.restore_active_user(user)
+        # The table no longer has to wait for a player who is not playing.
+        if game_loop and game.all_players_have_bet():
+            game_loop.bets_done_event.set()
 
     @socketio.on('bet')
     def handle_bet(data):
