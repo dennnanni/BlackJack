@@ -186,15 +186,14 @@ def test_a_player_sitting_out_is_not_dealt_in_nor_waited_for(loop_env):
         gl.join(timeout=3)
 
 
-def test_a_table_where_everyone_sits_out_idles_instead_of_dealing(loop_env):
+def test_a_table_where_everyone_sits_out_idles_instead_of_dealing(loop_env, monkeypatch):
     import game_server.events as events
     sio, box = loop_env
+    monkeypatch.setattr(loop_module, 'IDLE_ROUND_SECONDS', 0.05)
     sitter = User('sitter', 1000)
     table = Table('t4')
     table.add_user(sitter)
     events.sitting_out.add('sitter')
-    monkeyed = loop_module.IDLE_ROUND_SECONDS
-    loop_module.IDLE_ROUND_SECONDS = 0
 
     gl = loop_module.GameLoop(table)
     gl.start()
@@ -202,10 +201,92 @@ def test_a_table_where_everyone_sits_out_idles_instead_of_dealing(loop_env):
         sio.wait_for('table_idle')
         assert 'place_bets' not in sio.names()
     finally:
-        loop_module.IDLE_ROUND_SECONDS = monkeyed
         events.sitting_out.discard('sitter')
         for u in list(table.users):
             table.remove_user(u)
+        gl.join(timeout=3)
+
+
+def test_an_idle_table_wakes_up_for_the_one_player_who_sits_back_in(loop_env, monkeypatch):
+    """Everyone sitting out, then one sits in while the others stay out: the
+    table deals them an ordinary round on their own."""
+    import game_server.events as events
+    sio, box = loop_env
+    monkeypatch.setattr(loop_module, 'IDLE_ROUND_SECONDS', 0.05)
+    returner, stays_out = User('returner', 1000), User('stays_out', 1000)
+    table = Table('t5')
+    table.add_user(returner)
+    table.add_user(stays_out)
+    events.sitting_out.update({'returner', 'stays_out'})
+
+    gl = loop_module.GameLoop(table)
+    gl.start()
+    try:
+        sio.wait_for('table_idle')
+        events.sitting_out.discard('returner')   # what the sit_out handler does
+
+        sio.wait_for('place_bets')               # the table woke up by itself
+        game = table.game
+        assert list(game.active_users) == [returner]
+        game.place_bet(returner, 10)
+        gl.bets_done_event.set()
+
+        assert list(sio.wait_for('initial_cards')['hands']) == ['returner']
+        game.player_stand(gl.current_player)
+        gl.turn_done_event.set()
+        results = sio.wait_for('round_results')['results']
+        assert [r['username'] for r in results] == ['returner']
+    finally:
+        events.sitting_out.discard('stays_out')
+        for u in list(table.users):
+            table.remove_user(u)
+        gl.bets_done_event.set()
+        gl.turn_done_event.set()
+        gl.join(timeout=3)
+
+
+def test_sitting_back_in_during_the_betting_window_joins_that_round(loop_env):
+    """The betting window is still the beginning of the round, so changing
+    your mind inside it puts you back in *this* deal, not the next one."""
+    import game_server.events as events
+    sio, box = loop_env
+    player, returner = User('player', 1000), User('returner', 1000)
+    table = Table('t6')
+    table.add_user(player)
+    table.add_user(returner)
+    events.sitting_out.add('returner')
+
+    gl = loop_module.GameLoop(table)
+    gl.start()
+    try:
+        sio.wait_for('place_bets')
+        game = table.game
+        assert list(game.active_users) == [player]
+
+        # The sit-in path of the handler, inside the betting window.
+        events.sitting_out.discard('returner')
+        game.restore_active_user(returner)
+        assert not game.all_players_have_bet()   # the table waits for them again
+
+        game.place_bet(player, 10)
+        game.place_bet(returner, 10)
+        assert game.all_players_have_bet()
+        gl.bets_done_event.set()
+
+        hands = sio.wait_for('initial_cards')['hands']
+        assert sorted(hands) == ['player', 'returner']
+        for turn in range(2):                    # both take their turn
+            sio.wait_for('turn_started', after=turn)
+            game.player_stand(gl.current_player)
+            gl.turn_done_event.set()
+        results = sio.wait_for('round_results')['results']
+        assert sorted(r['username'] for r in results) == ['player', 'returner']
+    finally:
+        events.sitting_out.discard('returner')
+        for u in list(table.users):
+            table.remove_user(u)
+        gl.bets_done_event.set()
+        gl.turn_done_event.set()
         gl.join(timeout=3)
 
 
