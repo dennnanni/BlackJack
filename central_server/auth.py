@@ -1,20 +1,14 @@
 """Password hashing and the tokens central hands out."""
 import base64
 import hashlib
-import os
 import secrets
 import time
 
 import jwt
 from cryptography.fernet import Fernet
-from dotenv import load_dotenv
+from central_server.config import JOIN_TOKEN_TTL, SHARED_SECRET
 
-load_dotenv()
-
-SHARED_SECRET = os.getenv('SHARED_SECRET').encode()
-if not SHARED_SECRET:
-    raise ValueError('SHARED_SECRET environment variable not set')
-fernet_shared_secret = Fernet(SHARED_SECRET)
+fernet_shared_secret = Fernet(SHARED_SECRET.encode())
 
 
 def create_token(username, server):
@@ -24,7 +18,7 @@ def create_token(username, server):
     token = {
         'username': username,
         'iat': int(time.time()),
-        'exp': int(time.time()) + 120,  # token valid for 2 minutes
+        'exp': int(time.time()) + JOIN_TOKEN_TTL,  # add token validity period
         'server_id': server.id,
         'server_ip': server.ip,
         'server_port': server.port,

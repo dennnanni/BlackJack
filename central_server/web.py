@@ -8,6 +8,7 @@ from flask_login import UserMixin, current_user, login_required
 from flask_login import login_user as flask_login_user
 
 from central_server import auth, db
+from central_server.config import INITIAL_BALANCE
 from central_server.common.response_fields import DATA, ERROR, REDIRECT, TOKEN
 from central_server.common.structures import BaseUser, ServerLoad, UserInfo
 
@@ -17,9 +18,6 @@ LOGIN_PAGE_PATH = '/login'
 
 # Path to external API
 JOIN_TABLE_API_ENDPOINT = '/join'
-
-# Values
-INITIAL_BALANCE = 1000
 
 web_bp = Blueprint('web', __name__)
 

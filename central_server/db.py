@@ -1,28 +1,18 @@
 """Database layer of the central server: the engine, the ORM models and the
 data-access functions the blueprints call directly.
 """
-import os
-
+from central_server.config import DATABASE_URL
 from sqlalchemy import (Column, ForeignKey, Integer, Numeric, String, Table,
                         create_engine, func, literal)
 from sqlalchemy.engine import URL
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-url = os.getenv('DATABASE_URL')
-if not url:
-    url = URL.create(
-        drivername='postgresql',
-        username='postgres',
-        password='postgres',
-        host='localhost',
-        database='BlackJack'
-    )
-engine = create_engine(url)
+engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
-# Associazione molti-a-molti tra User e GameServer
+# many-to-many relationship between users and servers
 userservers = Table(
     'userserver', Base.metadata,
     Column('username', String, ForeignKey('user.username', ondelete='CASCADE'), primary_key=True),
