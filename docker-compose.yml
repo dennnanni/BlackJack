@@ -15,7 +15,6 @@ services:
       - "16000:5000"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
-    volumes:
       - PYTHONBUFFERED=1
     env_file: .env
     depends_on:
