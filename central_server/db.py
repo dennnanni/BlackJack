@@ -1,9 +1,6 @@
-"""Database layer of the central server: the engine, the ORM models and the
-data-access functions the blueprints call directly.
+"""Database layer of the central server."""
+from decimal import Decimal
 
-Nothing here swallows database errors: a failing query raises and Flask turns
-that into a 500, rather than a silent None the callers mistake for "no data".
-"""
 from sqlalchemy import (Column, ForeignKey, Integer, Numeric, String, Table,
                         create_engine, func, literal)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
@@ -14,7 +11,7 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
-# Associazione molti-a-molti tra User e GameServer
+# many-to-many relationship between users and game servers
 userservers = Table(
     'userserver', Base.metadata,
     Column('username', String, ForeignKey('user.username', ondelete='CASCADE'), primary_key=True),
@@ -98,5 +95,5 @@ def update_users_balance(results):
         for result in results:
             user = session.get(User, result.username)
             if user:
-                user.balance += result.balance_difference
+                user.balance += Decimal(str(result.balance_difference))
         session.commit()
