@@ -3,8 +3,7 @@ from http import HTTPStatus
 import json
 from central_server import db
 from central_server.auth import fernet_shared_secret
-from central_server.common.response_fields import ENCRYPTED, ERROR, SERVER_ID, SUCCESS, TOKEN
-from central_server.common.structures import Result, Server
+from shared.messages import ENCRYPTED, ERROR, SERVER_ID, SUCCESS, TOKEN, Result, Server
 from flask import Blueprint, jsonify, request
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError

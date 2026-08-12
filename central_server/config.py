@@ -10,7 +10,7 @@ if not SHARED_SECRET:
     raise ValueError('SHARED_SECRET is not set: run `python secret_generator.py` first')
 
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/blackjack')
-CENTRAL_PORT = int(os.getenv('CENTRAL_PORT', '5000'))
+CENTRAL_PORT = int(os.getenv('CENTRAL_PORT', '5002'))
 
 # Flask session-cookie key
 SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_hex(32))

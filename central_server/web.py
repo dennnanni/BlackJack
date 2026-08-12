@@ -1,6 +1,4 @@
-"""Player-facing web routes: login, registration, home and dispatch to a
-game server, plus the Socket.IO handlers the home page calls.
-"""
+"""Player-facing web routes."""
 from dataclasses import dataclass
 
 from flask import Blueprint, redirect, render_template, request, session
@@ -9,8 +7,11 @@ from flask_login import login_user as flask_login_user
 
 from central_server import auth, db
 from central_server.config import INITIAL_BALANCE
-from central_server.common.response_fields import DATA, ERROR, REDIRECT, TOKEN
-from central_server.common.structures import BaseUser, ServerLoad, UserInfo
+from shared.messages import ERROR, TOKEN
+
+# Fields of the Socket.IO replies the home page reads
+DATA = 'data'
+REDIRECT = 'redirect'
 
 # Path local route
 USER_HOME_PATH = '/user/'
@@ -23,10 +24,25 @@ web_bp = Blueprint('web', __name__)
 
 
 @dataclass
-class UserSession(BaseUser, UserMixin):
+class UserSession(UserMixin):
+    username: str
 
     def get_id(self):
         return self.username
+
+
+@dataclass
+class ServerLoad:
+    """A registered game server together with how many players it holds."""
+    id: int
+    ip: str
+    port: int
+    connected_users: int
+    max_users: int
+    key: str
+
+    def get_url(self):
+        return f'http://{self.ip}:{self.port}'
 
 
 class Dispatcher:
@@ -42,7 +58,7 @@ class Dispatcher:
         if not servers:
             return None, 'No servers available'
 
-        received_servers = [ServerLoad.from_tuple(server) for server in servers]
+        received_servers = [ServerLoad(*server) for server in servers]
 
         picked = self.__pick_server(received_servers)
         if not picked:
@@ -89,7 +105,8 @@ def get_user_info(data):
     if not user:
         return {ERROR: f'User {username} not found'}
 
-    return {DATA: UserInfo(user.username, user.balance).to_dict()}
+    # balance is a Numeric column, so SQLAlchemy returns a Decimal, which is not JSON serializable
+    return {DATA: {'username': user.username, 'balance': float(user.balance)}}
 
 
 def get_game_server(data):

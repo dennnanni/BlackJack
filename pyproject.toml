@@ -5,6 +5,7 @@ description = ""
 authors = [ "Denise Nanni <denise.nanni1@gmail.com>" ]
 readme = "README.md"
 packages = [
+    { include = "shared" },
     { include = "central_server"},
     { include = "src", from = "game_server" },
 ]

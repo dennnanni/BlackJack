@@ -12,7 +12,7 @@ services:
     build: .
     command: poetry run central
     ports:
-      - "16000:5000"
+      - "5002:5002"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
       - SECRET_KEY=${SECRET_KEY:-blackjack-demo-session-key}
@@ -30,7 +30,6 @@ services:
       SERVER_HOST: "127.0.0.1"
       SERVER_PORT: "8000"
       CENTRAL_SERVER_URL: "http://central:5002/api/servers"
-      
     env_file: .env
     depends_on:
       - central
