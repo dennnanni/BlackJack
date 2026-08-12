@@ -1,7 +1,0 @@
-SUCCESS = 'success'
-ERROR = 'error'
-TOKEN = 'token'
-REDIRECT = 'redirect'
-DATA = 'data'
-ENCRYPTED = 'encrypted'
-SERVER_ID = 'server_id'
