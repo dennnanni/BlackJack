@@ -1,19 +1,64 @@
-from sqlalchemy import func, literal
-from sqlalchemy.exc import SQLAlchemyError
-from database import SessionLocal, engine
-from database.orm.orm import Base, GameServer, User, userservers
+"""Database layer of the central server: the engine, the ORM models and the
+data-access functions the blueprints call directly.
+"""
+import os
 
-Base.metadata.create_all(bind=engine)
+from sqlalchemy import (Column, ForeignKey, Integer, Numeric, String, Table,
+                        create_engine, func, literal)
+from sqlalchemy.engine import URL
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+
+url = os.getenv('DATABASE_URL')
+if not url:
+    url = URL.create(
+        drivername='postgresql',
+        username='postgres',
+        password='postgres',
+        host='localhost',
+        database='BlackJack'
+    )
+engine = create_engine(url)
+SessionLocal = sessionmaker(bind=engine)
+Base = declarative_base()
+
+# Associazione molti-a-molti tra User e GameServer
+userservers = Table(
+    'userserver', Base.metadata,
+    Column('username', String, ForeignKey('user.username', ondelete='CASCADE'), primary_key=True),
+    Column('idserver', Integer, ForeignKey('gameserver.id', ondelete='CASCADE'), primary_key=True)
+)
+
+
+class User(Base):
+    __tablename__ = 'user'
+
+    username = Column(String, primary_key=True)
+    password = Column(String, nullable=False)
+    salt = Column(String, nullable=False)
+    balance = Column(Numeric(10, 2), default=0.0)
+
+    servers = relationship("GameServer", secondary=userservers, back_populates="users")
+
+
+class GameServer(Base):
+    __tablename__ = 'gameserver'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    ip = Column(String, nullable=False)
+    port = Column(Integer, nullable=False)
+    key = Column(String, nullable=False)
+
+    users = relationship("User", secondary=userservers, back_populates="servers")
+
+
+def init_db():
+    Base.metadata.create_all(bind=engine)
+
 
 def add_user(username, password, salt, balance):
     """
     Adds a user to the database.
-    
-    Args:
-        username (str): The username of the user.
-        password (str): The password of the user.
-        balance (float): The balance of the user.
-        salt (str): The salt for the password.
     """
     try:
         new_user = User(username=username, password=password, balance=balance, salt=salt)
@@ -23,39 +68,32 @@ def add_user(username, password, salt, balance):
         return True
     except SQLAlchemyError as e:
         print(f'Error adding user: {e}')
-        session.rollback()
         return str(e)
-    
+
+
 def get_user(username):
     """
-    Retrieves a user from the database.
-    
-    Args:
-        username (str): The username of the user.
-    
-    Returns:
-        User: The user object if found, None otherwise.
+    Retrieves a user from the database, or None if there is no such user.
     """
     try:
         with SessionLocal() as session:
-            user = session.query(User).filter(User.username == username).first()
-            return user
+            return session.query(User).filter(User.username == username).first()
     except SQLAlchemyError as e:
         print(f'Error retrieving user: {e}')
         return None
-    
-    
+
+
 def get_servers_with_user_count():
     """
     Retrieves the list of servers with connected users count from the database.
-    
+
     Returns:
-        list: A list of objects that include id, ip and port of the server, 
-        number of users connected to it and the maximum number of players accepted.
+        list: id, ip and port of the server, number of users connected to it
+        and the maximum number of players accepted.
     """
     try:
         with SessionLocal() as session:
-            result = session.query(
+            return session.query(
                 GameServer.id,
                 GameServer.ip,
                 GameServer.port,
@@ -67,21 +105,14 @@ def get_servers_with_user_count():
             ).outerjoin(
                 User, userservers.c.username == User.username
             ).group_by(GameServer).all()
-            
-            return result
     except SQLAlchemyError as e:
         print(f'Error retrieving active servers: {e}')
         return None
-    
+
+
 def register_server(server):
     """
-    Registers a new server in the database.
-    
-    Args:
-        server (GameServer): The server object to be registered.
-    
-    Returns:
-        bool: True if the server was registered successfully, False otherwise.
+    Registers a new server in the database and returns its assigned id.
     """
     try:
         with SessionLocal() as session:
@@ -91,35 +122,25 @@ def register_server(server):
         return server.id
     except SQLAlchemyError as e:
         print(f'Error registering server: {e}')
-        session.rollback()
         return False
-    
+
+
 def get_server_key(server_id):
     """
     Retrieves the key of a server by its ID.
-    
-    Args:
-        server_id (int): The ID of the server.
-    
-    Returns:
-        str: The key of the server if found, None otherwise.
     """
     try:
         with SessionLocal() as session:
             server = session.query(GameServer).filter(GameServer.id == server_id).first()
-            if server:
-                return server.key
-            return None
+            return server.key if server else None
     except SQLAlchemyError as e:
         print(f'Error retrieving server key: {e}')
         return None
-    
+
+
 def update_users_balance(results):
     """
     Updates the balances of users based on the results.
-    
-    Args:
-        results (list): A list of Result objects containing username and balanceDifference.
     """
     try:
         with SessionLocal() as session:
@@ -131,9 +152,4 @@ def update_users_balance(results):
             return True
     except SQLAlchemyError as e:
         print(f'Error updating user balances: {e}')
-        session.rollback()
         return False
-    except Exception as e:
-        print(f'Unexpected error updating user balances: {e}')
-        session.rollback()
-        return str(e)

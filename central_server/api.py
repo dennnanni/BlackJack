@@ -1,19 +1,19 @@
+"""HTTP API the game servers call."""
 from http import HTTPStatus
 import json
-from common.response_fields import ENCRYPTED, ERROR, SERVER_ID, SUCCESS, TOKEN
-from common.structures import Result, Server
-from database.model.database_actions import get_server_key, register_server, update_users_balance
-from database.orm.orm import GameServer
+from central_server import db
+from central_server.auth import fernet_shared_secret
+from central_server.common.response_fields import ENCRYPTED, ERROR, SERVER_ID, SUCCESS, TOKEN
+from central_server.common.structures import Result, Server
 from flask import Blueprint, jsonify, request
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
-from client import fernet_shared_secret
 from cryptography.fernet import Fernet
 
-servers_bp = Blueprint('servers', __name__)
+api_bp = Blueprint('api', __name__, url_prefix='/api/servers')
 
 
-@servers_bp.route('/register', methods=['POST'])
+@api_bp.route('/register', methods=['POST'])
 def index():
     data = request.get_json(silent=True)
     if not data or ENCRYPTED not in data:
@@ -36,7 +36,7 @@ def index():
     fernet_private = Fernet(server.key.encode())
     server.key = fernet_shared_secret.encrypt(server.key.encode()).decode()
 
-    server_id = register_server(GameServer(**server.to_dict()))
+    server_id = db.register_server(db.GameServer(**server.to_dict()))
     if not server_id:
         return jsonify({ERROR: 'Failed to register the server'}), HTTPStatus.INTERNAL_SERVER_ERROR
 
@@ -49,7 +49,7 @@ def index():
     # success message contains data sent from the server encrypted with its key for validity
     return jsonify({ENCRYPTED: encrypted_data}), HTTPStatus.CREATED
 
-@servers_bp.route('/results', methods=['POST'])
+@api_bp.route('/results', methods=['POST'])
 def publish_results_route():
     data = request.get_json()
     if not data or TOKEN not in data:
@@ -60,7 +60,7 @@ def publish_results_route():
     if not server_id or not server_id.isdigit():
         return jsonify({ERROR: 'Missing server ID'}), HTTPStatus.UNAUTHORIZED
 
-    key = get_server_key(int(server_id))
+    key = db.get_server_key(int(server_id))
     if not key:
         return jsonify({ERROR: 'Invalid server ID'}), HTTPStatus.UNAUTHORIZED
 
@@ -75,7 +75,7 @@ def publish_results_route():
         return jsonify({ERROR: f'Bad data in token: {str(e)}'}), HTTPStatus.BAD_REQUEST
 
     results = [Result(**result) for result in payload.get('results')]
-    if update_users_balance(results) is not True:
+    if db.update_users_balance(results) is not True:
         return jsonify({ERROR: 'Failed to update balances'}), HTTPStatus.INTERNAL_SERVER_ERROR
 
     return jsonify({SUCCESS: True}), HTTPStatus.OK

@@ -1,13 +1,25 @@
+"""Password hashing and the tokens central hands out."""
 import base64
 import hashlib
+import os
 import secrets
 import time
-from client import fernet_shared_secret
+
 import jwt
+from cryptography.fernet import Fernet
+from dotenv import load_dotenv
+
+load_dotenv()
+
+SHARED_SECRET = os.getenv('SHARED_SECRET').encode()
+if not SHARED_SECRET:
+    raise ValueError('SHARED_SECRET environment variable not set')
+fernet_shared_secret = Fernet(SHARED_SECRET)
+
 
 def create_token(username, server):
     private_key = fernet_shared_secret.decrypt(server.key.encode()).decode()
-    
+
     # token generation to be used for authentication to the game server
     token = {
         'username': username,
@@ -17,13 +29,15 @@ def create_token(username, server):
         'server_ip': server.ip,
         'server_port': server.port,
     }
-    
+
     return jwt.encode(token, private_key.encode(), algorithm='HS256')
+
 
 def get_hashed_password(password, salt):
     salt_bytes = base64.b64decode(salt) if isinstance(salt, str) else salt
     hash_bytes = hashlib.pbkdf2_hmac('sha256', password.encode('utf-8'), salt_bytes, 100_000)
     return base64.b64encode(hash_bytes).decode('utf-8')
+
 
 def generate_hashed_password(password):
     salt = secrets.token_bytes(16)  # 128-bit salt
