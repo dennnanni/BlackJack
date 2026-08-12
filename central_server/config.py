@@ -1,4 +1,5 @@
 import os
+import secrets
 
 from dotenv import load_dotenv
 
@@ -10,6 +11,9 @@ if not SHARED_SECRET:
 
 DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localhost:5432/blackjack')
 CENTRAL_PORT = int(os.getenv('CENTRAL_PORT', '5000'))
+
+# Flask session-cookie key
+SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_hex(32))
 
 # validity period for the join token in seconds
 JOIN_TOKEN_TTL = 120

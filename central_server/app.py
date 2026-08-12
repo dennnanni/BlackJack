@@ -1,3 +1,4 @@
+from central_server.config import SECRET_KEY
 from flask import Flask, redirect
 from flask_login import LoginManager
 from flask_socketio import SocketIO
@@ -11,7 +12,7 @@ socketio = SocketIO(cors_allowed_origins="*", manage_session=False)
 
 def create_app():
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'secret!'
+    app.config['SECRET_KEY'] = SECRET_KEY
 
     db.init_db()
     app.register_blueprint(web_bp)
