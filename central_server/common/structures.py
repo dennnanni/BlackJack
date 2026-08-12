@@ -1,5 +1,4 @@
 from dataclasses import asdict, dataclass
-from turtle import st
 
 @dataclass
 class BaseUser:

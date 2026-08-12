@@ -9,7 +9,6 @@ from flask_login import login_user as flask_login_user
 
 
 def login_user(username, password):
-    print(f'Login attempt with username: {username} and password: {password}')
     if not username or not password:
         return {ERROR: 'Username and password are required'}
 
