@@ -6,11 +6,9 @@ authors = [ "Denise Nanni <denise.nanni1@gmail.com>" ]
 readme = "README.md"
 packages = [
     { include = "client_interface", from = "central_server" },
-    { include = "servers_interface", from = "central_server" },
     { include = "src", from = "game_server" },
     { include = "database", from = "central_server/database_interface" },
-    { include = "client", from = "central_server/client_interface" },
-    { include = "servers", from = "central_server/servers_interface" }
+    { include = "client", from = "central_server/client_interface" }
 ]
 
 [tool.poetry.dependencies]
@@ -31,8 +29,7 @@ requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
-client = "client_interface.client.main:main"
-servers = "servers_interface.servers.main:main"
+central = "client_interface.client.main:main"
 game_server = "game_server.src.main:main"
 
 [tool.poetry.group.dev.dependencies]

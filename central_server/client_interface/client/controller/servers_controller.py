@@ -7,7 +7,7 @@ from database.orm.orm import GameServer
 from flask import Blueprint, jsonify, request
 import jwt
 from jwt.exceptions import InvalidTokenError, ExpiredSignatureError
-from servers import fernet_shared_secret
+from client import fernet_shared_secret
 from cryptography.fernet import Fernet
 
 servers_bp = Blueprint('servers', __name__)

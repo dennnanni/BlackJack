@@ -8,30 +8,15 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  servers_interface:
+  central:
     build: .
-    command: poetry run servers
-    ports:
-      - "16001:5002"
-    environment:
-      - SERVER_PORT=16001
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./:/var/www
-    depends_on:
-      - postgres
-
-  client_interface:
-    build: .
-    command: poetry run client
+    command: poetry run central
     ports:
       - "16000:5000"
     environment:
-      - CLIENT_PORT=16000
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
     volumes:
-      - ./:/var/www
+      - PYTHONBUFFERED=1
     depends_on:
       - postgres
 
@@ -43,7 +28,7 @@ services:
     environment:
       SERVER_HOST: "127.0.0.1"
       SERVER_PORT: "8000"
-      CENTRAL_SERVER_URL: "http://servers_interface:5002"
+      CENTRAL_SERVER_URL: "http://central:5002/api/servers"
       
   
 

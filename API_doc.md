@@ -4,7 +4,7 @@ a string describing the error.
 
 ## Server interface
 
-> **POST** `/register`
+> **POST** `/api/servers/register`
 
 #### INPUT FIELDS
 
@@ -34,7 +34,7 @@ Where `Server` object is in the form:
     Where `RegisteredServer` object adds an id to the `Server` object.
 - `400 BAD REQUEST`
 
-> **POST** `/results`
+> **POST** `/api/servers/results`
 
 #### INPUT HEADERS:
 - `X-Server-ID`: string containing the game server ID.
