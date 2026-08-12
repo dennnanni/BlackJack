@@ -15,23 +15,12 @@ services:
       - "16001:5002"
     environment:
       - SERVER_PORT=16001
-      - DATABASE_URL=http://database_interface:5001
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./:/var/www
-    depends_on:
-      - database_interface
-
-  database_interface:
-    build: .
-    command: poetry run database
-    environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
       - PYTHONUNBUFFERED=1
-    depends_on:
-      - postgres
     volumes:
       - ./:/var/www
+    depends_on:
+      - postgres
 
   client_interface:
     build: .
@@ -40,9 +29,11 @@ services:
       - "16000:5000"
     environment:
       - CLIENT_PORT=16000
-      - DATABASE_URL=http://database_interface:5001
+      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
     volumes:
       - ./:/var/www
+    depends_on:
+      - postgres
 
   game_server_1:
     build: .
