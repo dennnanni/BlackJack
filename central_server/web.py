@@ -100,10 +100,11 @@ def register_post():
     if not username or not password:
         return render_template('access.html', register=True, error='Username and password are required')
 
-    hashed_password, salt = auth.generate_hashed_password(password)
-    if db.add_user(username, hashed_password, salt, INITIAL_BALANCE) is not True:
-        return render_template('access.html', register=True, error=f'Error adding user {username}')
+    if db.get_user(username) is not None:
+        return render_template('access.html', register=True, error=f'Username {username} is already taken')
 
+    hashed_password, salt = auth.generate_hashed_password(password)
+    db.add_user(username, hashed_password, salt, INITIAL_BALANCE)
     return redirect('/login')
 
 

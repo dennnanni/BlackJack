@@ -36,8 +36,6 @@ def index():
     server.key = fernet_shared_secret.encrypt(server.key.encode()).decode()
 
     server_id = db.register_server(db.GameServer(**server.to_dict()))
-    if not server_id:
-        return jsonify({ERROR: 'Failed to register the server'}), HTTPStatus.INTERNAL_SERVER_ERROR
 
     response_payload = {
         **json.loads(cleartext),
@@ -73,8 +71,6 @@ def publish_results_route():
     except Exception as e:
         return jsonify({ERROR: f'Bad data in token: {str(e)}'}), HTTPStatus.BAD_REQUEST
 
-    results = [Result(**result) for result in payload.get('results')]
-    if db.update_users_balance(results) is not True:
-        return jsonify({ERROR: 'Failed to update balances'}), HTTPStatus.INTERNAL_SERVER_ERROR
+    db.update_users_balance([Result(**result) for result in payload.get('results')])
 
     return jsonify({SUCCESS: True}), HTTPStatus.OK

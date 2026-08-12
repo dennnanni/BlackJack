@@ -1,18 +1,20 @@
 """Database layer of the central server: the engine, the ORM models and the
 data-access functions the blueprints call directly.
+
+Nothing here swallows database errors: a failing query raises and Flask turns
+that into a 500, rather than a silent None the callers mistake for "no data".
 """
-from central_server.config import DATABASE_URL
 from sqlalchemy import (Column, ForeignKey, Integer, Numeric, String, Table,
                         create_engine, func, literal)
-from sqlalchemy.engine import URL
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+
+from central_server.config import DATABASE_URL
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
-# many-to-many relationship between users and servers
+# Associazione molti-a-molti tra User e GameServer
 userservers = Table(
     'userserver', Base.metadata,
     Column('username', String, ForeignKey('user.username', ondelete='CASCADE'), primary_key=True),
@@ -47,99 +49,54 @@ def init_db():
 
 
 def add_user(username, password, salt, balance):
-    """
-    Adds a user to the database.
-    """
-    try:
-        new_user = User(username=username, password=password, balance=balance, salt=salt)
-        with SessionLocal() as session:
-            session.add(new_user)
-            session.commit()
-        return True
-    except SQLAlchemyError as e:
-        print(f'Error adding user: {e}')
-        return str(e)
+    with SessionLocal() as session:
+        session.add(User(username=username, password=password, salt=salt, balance=balance))
+        session.commit()
 
 
 def get_user(username):
-    """
-    Retrieves a user from the database, or None if there is no such user.
-    """
-    try:
-        with SessionLocal() as session:
-            return session.query(User).filter(User.username == username).first()
-    except SQLAlchemyError as e:
-        print(f'Error retrieving user: {e}')
-        return None
+    with SessionLocal() as session:
+        return session.get(User, username)
 
 
 def get_servers_with_user_count():
-    """
-    Retrieves the list of servers with connected users count from the database.
-
-    Returns:
-        list: id, ip and port of the server, number of users connected to it
-        and the maximum number of players accepted.
-    """
-    try:
-        with SessionLocal() as session:
-            return session.query(
-                GameServer.id,
-                GameServer.ip,
-                GameServer.port,
-                func.count(User.username).label('connected_users'),
-                literal(10).label('max_users'),
-                GameServer.key
-            ).outerjoin(
-                userservers, GameServer.id == userservers.c.idserver
-            ).outerjoin(
-                User, userservers.c.username == User.username
-            ).group_by(GameServer).all()
-    except SQLAlchemyError as e:
-        print(f'Error retrieving active servers: {e}')
-        return None
+    """Every registered server with the number of players connected to it and
+    the maximum it accepts."""
+    with SessionLocal() as session:
+        return session.query(
+            GameServer.id,
+            GameServer.ip,
+            GameServer.port,
+            func.count(User.username).label('connected_users'),
+            literal(10).label('max_users'),
+            GameServer.key
+        ).outerjoin(
+            userservers, GameServer.id == userservers.c.idserver
+        ).outerjoin(
+            User, userservers.c.username == User.username
+        ).group_by(GameServer).all()
 
 
 def register_server(server):
-    """
-    Registers a new server in the database and returns its assigned id.
-    """
-    try:
-        with SessionLocal() as session:
-            session.add(server)
-            session.commit()
-            session.refresh(server)
+    """Insert a new game server; returns its assigned id."""
+    with SessionLocal() as session:
+        session.add(server)
+        session.commit()
         return server.id
-    except SQLAlchemyError as e:
-        print(f'Error registering server: {e}')
-        return False
 
 
 def get_server_key(server_id):
-    """
-    Retrieves the key of a server by its ID.
-    """
-    try:
-        with SessionLocal() as session:
-            server = session.query(GameServer).filter(GameServer.id == server_id).first()
-            return server.key if server else None
-    except SQLAlchemyError as e:
-        print(f'Error retrieving server key: {e}')
-        return None
+    """The key of a registered server, or None if there is no such server."""
+    with SessionLocal() as session:
+        server = session.get(GameServer, server_id)
+        return server.key if server else None
 
 
 def update_users_balance(results):
-    """
-    Updates the balances of users based on the results.
-    """
-    try:
-        with SessionLocal() as session:
-            for result in results:
-                user = session.query(User).filter(User.username == result.username).first()
-                if user:
-                    user.balance += result.balance_difference
-            session.commit()
-            return True
-    except SQLAlchemyError as e:
-        print(f'Error updating user balances: {e}')
-        return False
+    """Apply each result's balance change to its player."""
+    with SessionLocal() as session:
+        for result in results:
+            user = session.get(User, result.username)
+            if user:
+                user.balance += result.balance_difference
+        session.commit()
