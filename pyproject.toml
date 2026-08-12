@@ -5,13 +5,13 @@ description = ""
 authors = [ "Denise Nanni <denise.nanni1@gmail.com>" ]
 readme = "README.md"
 packages = [
-    { include = "database_interface", from = "main_server" },
-    { include = "client_interface", from = "main_server" },
-    { include = "servers_interface", from = "main_server" },
+    { include = "database_interface", from = "central_server" },
+    { include = "client_interface", from = "central_server" },
+    { include = "servers_interface", from = "central_server" },
     { include = "src", from = "game_server" },
-    { include = "database", from = "main_server/database_interface" },
-    { include = "client", from = "main_server/client_interface" },
-    { include = "servers", from = "main_server/servers_interface" }
+    { include = "database", from = "central_server/database_interface" },
+    { include = "client", from = "central_server/client_interface" },
+    { include = "servers", from = "central_server/servers_interface" }
 ]
 
 [tool.poetry.dependencies]
