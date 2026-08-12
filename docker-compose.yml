@@ -17,6 +17,7 @@ services:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
     volumes:
       - PYTHONBUFFERED=1
+    env_file: .env
     depends_on:
       - postgres
 
@@ -30,7 +31,9 @@ services:
       SERVER_PORT: "8000"
       CENTRAL_SERVER_URL: "http://central:5002/api/servers"
       
-  
+    env_file: .env
+    depends_on:
+      - central
 
 volumes:
   postgres_data:
