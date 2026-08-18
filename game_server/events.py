@@ -1,8 +1,8 @@
 from flask_socketio import emit, join_room
 from flask_socketio import SocketIO
-from src.model.game_structures import User, TableManager, Hand
-from src.game_loop import GameLoop
-from src import central_client
+from game_server.game.model import User, TableManager, Hand
+from game_server.loop import GameLoop
+from game_server.app import central_client
 
 table_manager = TableManager()
 user_map = {}

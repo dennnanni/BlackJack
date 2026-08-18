@@ -1,8 +1,8 @@
 import time
 from flask import Flask
 from flask_socketio import SocketIO
-from src.central_api import CentralServerAPI
-from src.config.settings import SERVER_HOST, SERVER_PORT, CENTRAL_SERVER_URL, SHARED_SECRET
+from game_server.central_client import CentralServerAPI
+from game_server.config import SERVER_HOST, SERVER_PORT, CENTRAL_SERVER_URL, SHARED_SECRET
 from cryptography.fernet import Fernet
 
 socketio = SocketIO(cors_allowed_origins="*")
@@ -13,9 +13,9 @@ def create_app():
     app = Flask(__name__)
     app.config['SECRET_KEY'] = 'secret!'
     
-    from .routes import register_routes
-    register_routes(app)
-    
+    from game_server.join import game_bp
+    app.register_blueprint(game_bp, url_prefix='/')
+
     socketio.init_app(app)
         
     # TODO: possibilità di avere una lista di server da contattare in caso di partizionamento di rete
@@ -34,7 +34,7 @@ def create_app():
         print("[!] Failed to register the game server after 10 attempts. Shutting down.")
         exit(1)
     
-    from .event_handlers import register_event_handlers
+    from game_server.events import register_event_handlers
     register_event_handlers(socketio)
 
     return app

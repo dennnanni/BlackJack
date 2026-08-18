@@ -1,4 +1,4 @@
-from src.model.game_structures import User, TableManager
+from game_server.game.model import User, TableManager
 
 def test_table_assignment_and_retrieval():
     manager = TableManager()

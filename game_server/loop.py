@@ -1,8 +1,8 @@
 import time
 from threading import Thread, Event
-from src.model.game_structures import Deck, Game, Hand, User
-from src import socketio
-from src import central_client
+from game_server.game.model import Deck, Game, Hand, User
+from game_server.app import socketio
+from game_server.app import central_client
 
 class GameLoop(Thread):
     def __init__(self, table):

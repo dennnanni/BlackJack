@@ -7,7 +7,7 @@ readme = "README.md"
 packages = [
     { include = "shared" },
     { include = "central_server"},
-    { include = "src", from = "game_server" },
+    { include = "game_server" },
 ]
 
 [tool.poetry.dependencies]
@@ -29,7 +29,7 @@ build-backend = "poetry.core.masonry.api"
 
 [tool.poetry.scripts]
 central = "central_server.main:main"
-game_server = "game_server.src.main:main"
+game_server = "game_server.main:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"

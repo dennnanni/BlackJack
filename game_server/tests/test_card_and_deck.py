@@ -1,4 +1,4 @@
-from src.model.game_structures import Card, Deck
+from game_server.game.model import Card, Deck
 
 def test_card_value():
     card = Card("K", "Hearts")

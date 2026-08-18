@@ -1,4 +1,4 @@
-from src.model.game_structures import User, Game, Deck, Card, Hand
+from game_server.game.model import User, Game, Deck, Card, Hand
 
 def test_game_betting_and_result():
     user = User("Charlie", 100)

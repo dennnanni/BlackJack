@@ -1,5 +1,5 @@
-from src import create_app, socketio
-from src.config.settings import SERVER_HOST, SERVER_PORT
+from game_server.app import create_app, socketio
+from game_server.config import SERVER_HOST, SERVER_PORT
 
 def main():
     app = create_app()

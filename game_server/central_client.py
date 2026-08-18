@@ -1,6 +1,6 @@
 import json
 import requests
-from src.encryption import encrypt_with_key, decrypt_with_key
+from game_server.encryption import encrypt_with_key, decrypt_with_key
 
 
 class CentralServerAPI:

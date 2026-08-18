@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, jsonify, g
 import jwt
-from src import key
+from game_server.app import key
 game_bp = Blueprint('game', __name__)
 
 @game_bp.route('/')
