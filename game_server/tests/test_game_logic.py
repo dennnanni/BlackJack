@@ -72,17 +72,23 @@ def test_dealer_cannot_add_more_cards():
         game.add_dealer_card(Card('K', DEFAULT_SUIT))
     assert str(exc_info.value) == "Dealer cannot take more cards"
     
-def test_is_winner():
+def test_blackjack_beats_a_plain_twenty():
     user = User("User1", 200)
     game = Game([user], Deck())
-    
-    user.add_card(Card('A', DEFAULT_SUIT))  # Ace
-    user.add_card(Card('J', DEFAULT_SUIT))  # 'J'
-    game.add_dealer_card(Card('10', DEFAULT_SUIT))  # 10
-    game.add_dealer_card(Card('Q', DEFAULT_SUIT))  # 'J'
-    assert game._is_winner(user) == True
-    
-    user.remove_card(Card('A', DEFAULT_SUIT))  # Remove Ace
-    assert len(user.get_hand()) == 1  # Check if Ace is removed
-    user.add_card(Card('10', DEFAULT_SUIT))  # Add 10
-    assert game._is_winner(user) == False
+
+    user.add_card(Card('A', DEFAULT_SUIT))
+    user.add_card(Card('J', DEFAULT_SUIT))         # natural blackjack
+    game.add_dealer_card(Card('10', DEFAULT_SUIT))
+    game.add_dealer_card(Card('Q', DEFAULT_SUIT))  # 20
+    assert game._is_winner(user) is True
+
+
+def test_twenty_does_not_beat_dealer_twenty():
+    user = User("User1", 200)
+    game = Game([user], Deck())
+
+    user.add_card(Card('10', DEFAULT_SUIT))
+    user.add_card(Card('J', DEFAULT_SUIT))         # 20, not a blackjack
+    game.add_dealer_card(Card('10', DEFAULT_SUIT))
+    game.add_dealer_card(Card('Q', DEFAULT_SUIT))  # 20
+    assert game._is_winner(user) is False
