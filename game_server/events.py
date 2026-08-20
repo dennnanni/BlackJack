@@ -47,29 +47,29 @@ def register_event_handlers(socketio):
     @socketio.on("bet")
     def handle_bet(data):
         username = data["username"]
-        amount = float(data["amount"])
         user = user_map[username]
         table = table_manager.get_user_table(username)
-        
+
         if not table:
             emit("error", {"message": "User not at any table"})
             return
         room_id = f"table-{table.id}"
-        if not table.game:
+        game = table.game
+        if not game:
             emit("error", {"message": "No active game"}, to=room_id)
             return
 
         try:
-            if table.game.place_bet(user, amount):
-                game_loop = table_game_map.get(table.id)
-                if game_loop:
-                    game_loop.bets_done_event.set()
+            all_bet = game.place_bet(user, float(data["amount"]))
+        except (KeyError, TypeError, ValueError) as e:
+            emit("error", {"message": str(e)})
+            return
 
-            if table.game.all_players_have_bet():
+        emit("bet_confirmed", {"user": username, "amount": game.bets.get(user)}, to=room_id)
+        if all_bet:
+            game_loop = table_game_map.get(table.id)
+            if game_loop:
                 game_loop.bets_done_event.set()
-                emit("bet_confirmed", {"user": username, "amount": amount}, to=room_id)
-        except Exception as e:
-            emit("error", {"message": str(e)}, to=room_id)
             
     @socketio.on('player_action')
     def handle_player_action(data):
@@ -87,7 +87,7 @@ def register_event_handlers(socketio):
             emit("error", {"message": "No active game"}, to=room_id)
             return
 
-        user = next((u for u in game.get_users() if u.username == username), None)
+        user = next((u for u in game.active_users if u.username == username), None)
         if not user:
             return
 
@@ -99,16 +99,15 @@ def register_event_handlers(socketio):
                 game.remove_active_user(user)
                 emit('player_busted', {'user': username}, to=room_id)
         elif action == 'stand':
-            game.remove_active_user(user)
+            game.player_stand(user)
             emit("user_stood", {"user": username}, to=room_id)
         elif action == 'double':
             try:
                 card = game.player_double_down(user)
-                emit("user_doubled", {
-                "user": username,
-                "card": str(card)
-                }, to=room_id)
-            except ValueError as e:
+                emit("user_doubled", {"user": username, "card": str(card)}, to=room_id)
+                if Hand.is_busted(user.hand):
+                    emit('player_busted', {'user': username}, to=room_id)
+            except (ValueError, KeyError) as e:
                 emit('error', {'user': username, 'message': str(e)}, to=room_id)
                 
         if table.game.all_players_done():

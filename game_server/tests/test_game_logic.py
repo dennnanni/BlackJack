@@ -1,37 +1,12 @@
-from game_server.game.model import Card, Hand, Game, User, Deck
+"""Round rules: betting limits, the dealer stand rule, and who wins what.
+Hand evaluation itself is covered in test_hand.py."""
 import pytest
+
+from game_server.game.model import Card, Deck, Game, User
 
 DEFAULT_SUIT = 'Hearts'
 
-@pytest.mark.parametrize("hand,expected", [
-    ([Card('J', DEFAULT_SUIT), Card('K', DEFAULT_SUIT)], 20),
-    ([Card('A', DEFAULT_SUIT), Card('A', DEFAULT_SUIT), Card('9', DEFAULT_SUIT)], 21),
-    ([Card('Q', DEFAULT_SUIT), Card('J', DEFAULT_SUIT), Card('2', DEFAULT_SUIT)], 22),
-])
-def test_hand_value(hand, expected):
-    assert Hand.get_hand_value(hand) == expected
-    
-def test_is_blackjack():
-    blackjack_hand = [Card('A', DEFAULT_SUIT), Card('J', DEFAULT_SUIT)]
-    non_blackjack_hand = [Card('10', DEFAULT_SUIT), Card('J', DEFAULT_SUIT)]
-    
-    assert Hand.is_blackjack(blackjack_hand) == True
-    assert Hand.is_blackjack(non_blackjack_hand) == False
 
-def test_is_busted():
-    busted_hand = [Card('J', DEFAULT_SUIT), Card('J', DEFAULT_SUIT), Card('3', DEFAULT_SUIT)]
-    non_busted_hand = [Card('J', DEFAULT_SUIT), Card('9', DEFAULT_SUIT)]
-    
-    assert Hand.is_busted(busted_hand) == True
-    assert Hand.is_busted(non_busted_hand) == False
-    
-def test_has_ace():
-    hand_with_ace = [Card('A', DEFAULT_SUIT), Card('J', DEFAULT_SUIT)]
-    hand_without_ace = [Card('10', DEFAULT_SUIT), Card('J', DEFAULT_SUIT)]
-    
-    assert Hand.has_ace(hand_with_ace) == True
-    assert Hand.has_ace(hand_without_ace) == False
-    
 def test_determine_difference():
     users = [User("User1", 200), User("User2", 200), User("User3", 200)]
     game = Game(users, Deck())
@@ -92,3 +67,43 @@ def test_twenty_does_not_beat_dealer_twenty():
     game.add_dealer_card(Card('10', DEFAULT_SUIT))
     game.add_dealer_card(Card('Q', DEFAULT_SUIT))  # 20
     assert game._is_winner(user) is False
+
+
+def test_player_below_dealer_loses_bet():
+    user = User("User1", 200)
+    game = Game([user], Deck())
+    game.place_bet(user, 50)
+
+    user.add_card(Card('10', DEFAULT_SUIT))
+    user.add_card(Card('5', DEFAULT_SUIT))         # 15
+    game.add_dealer_card(Card('10', DEFAULT_SUIT))
+    game.add_dealer_card(Card('9', DEFAULT_SUIT))  # 19
+
+    assert game._determine_difference(user) == -50
+
+
+def test_player_wins_when_dealer_busts():
+    user = User("User1", 200)
+    game = Game([user], Deck())
+    game.place_bet(user, 50)
+
+    user.add_card(Card('10', DEFAULT_SUIT))
+    user.add_card(Card('8', DEFAULT_SUIT))         # 18
+    game.add_dealer_card(Card('10', DEFAULT_SUIT))
+    game.add_dealer_card(Card('6', DEFAULT_SUIT))
+    game.add_dealer_card(Card('K', DEFAULT_SUIT))  # 26: busted
+
+    assert game._determine_difference(user) == 50
+
+
+def test_equal_hands_push():
+    user = User("User1", 200)
+    game = Game([user], Deck())
+    game.place_bet(user, 50)
+
+    user.add_card(Card('10', DEFAULT_SUIT))
+    user.add_card(Card('9', DEFAULT_SUIT))         # 19
+    game.add_dealer_card(Card('10', DEFAULT_SUIT))
+    game.add_dealer_card(Card('9', DEFAULT_SUIT))  # 19
+
+    assert game._determine_difference(user) == 0

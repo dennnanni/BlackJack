@@ -50,8 +50,9 @@ class Game:
         self.deck = deck
 
     def get_users(self):
-        """Restituisce la lista degli utenti attivi."""
-        return self.active_users
+        """Tutti gli utenti del round, sia chi deve ancora agire sia chi ha
+        finito."""
+        return self.active_users + self.finished_users
 
     def add_dealer_card(self, card):
         """Aggiunge una carta alla mano del dealer."""
@@ -66,11 +67,16 @@ class Game:
         if bet > user.balance:
             raise ValueError("Bet exceeds user's balance")
         self.bets[user] = bet
+        return self.all_players_have_bet()
+
+    def all_players_have_bet(self):
         return len(self.bets) == len(self.active_users)
 
     def determine_result(self):
         results: list[Result] = []
-        for user in self.active_users:
+        for user in self.get_users():
+            if user not in self.bets:
+                continue
             diff = self._determine_difference(user)
             user.update_balance(diff)
             results.append(Result(user.username, diff))
@@ -79,23 +85,37 @@ class Game:
     def _determine_difference(self, user):
         if Hand.is_busted(user.hand):
             return -self.bets[user]
-        elif self._is_winner(user):
+        if self._is_winner(user):
             return self.bets[user]
-        else:
+        if self._is_push(user):
             return 0
+        return -self.bets[user]
 
     def _is_winner(self, user):
-        dealer_value = Hand.get_hand_value(self.dealer_hand)
-        user_value = Hand.get_hand_value(user.hand)
         if Hand.is_busted(user.hand):
             return False
         if Hand.is_blackjack(user.hand) and not Hand.is_blackjack(self.dealer_hand):
             return True
-        return user_value > dealer_value
+        if Hand.is_busted(self.dealer_hand):
+            return True
+        return Hand.get_hand_value(user.hand) > Hand.get_hand_value(self.dealer_hand)
+
+    def _is_push(self, user):
+        return (not Hand.is_busted(self.dealer_hand)
+                and Hand.get_hand_value(user.hand) == Hand.get_hand_value(self.dealer_hand))
 
     def player_double_down(self, user):
+        if user not in self.bets:
+            raise ValueError("Cannot double down without a bet")
+        if len(user.hand) != Hand.BLACKJACK_HAND_LENGTH:
+            raise ValueError("Can only double down on the first two cards")
         self.place_bet(user, self.bets[user] * 2)
-        user.add_card(self.deck.draw_card())
+        card = self.deck.draw_card()
+        user.add_card(card)
+        self.remove_active_user(user)
+        return card
+
+    def player_stand(self, user):
         self.remove_active_user(user)
 
     def remove_active_user(self, user):
@@ -170,10 +190,12 @@ class Hand:
 
     @staticmethod
     def get_hand_value(hand):
+        # Aces count 11, then drop to 1 one at a time while the hand busts.
         hand_value = sum(card.value for card in hand)
-        if Hand.has_ace(hand) and hand_value > Hand.BLACKJACK:
-            # Se la mano ha un asso e il valore supera 21, sottraiamo 10
+        aces = sum(1 for card in hand if card.value == 11)
+        while hand_value > Hand.BLACKJACK and aces:
             hand_value -= 10
+            aces -= 1
         return hand_value
 
     @staticmethod
