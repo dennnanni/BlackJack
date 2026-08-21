@@ -8,41 +8,18 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
 
-  servers_interface:
+  central:
     build: .
-    command: poetry run servers
+    command: poetry run central
     ports:
-      - "16001:5002"
-    environment:
-      - SERVER_PORT=16001
-      - DATABASE_URL=http://database_interface:5001
-      - PYTHONUNBUFFERED=1
-    volumes:
-      - ./:/var/www
-    depends_on:
-      - database_interface
-
-  database_interface:
-    build: .
-    command: poetry run database
+      - "5002:5002"
     environment:
       - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
-      - PYTHONUNBUFFERED=1
+      - SECRET_KEY=${SECRET_KEY:-blackjack-demo-session-key}
+      - PYTHONBUFFERED=1
+    env_file: .env
     depends_on:
       - postgres
-    volumes:
-      - ./:/var/www
-
-  client_interface:
-    build: .
-    command: poetry run client
-    ports:
-      - "16000:5000"
-    environment:
-      - CLIENT_PORT=16000
-      - DATABASE_URL=http://database_interface:5001
-    volumes:
-      - ./:/var/www
 
   game_server_1:
     build: .
@@ -52,9 +29,10 @@ services:
     environment:
       SERVER_HOST: "127.0.0.1"
       SERVER_PORT: "8000"
-      CENTRAL_SERVER_URL: "http://servers_interface:5002"
-      
-  
+      CENTRAL_SERVER_URL: "http://central:5002/api/servers"
+    env_file: .env
+    depends_on:
+      - central
 
 volumes:
   postgres_data:

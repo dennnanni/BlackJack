@@ -1,4 +1,4 @@
-from src.model.game_structures import User, TableManager
+from game_server.game.model import User, TableManager
 
 def test_table_assignment_and_retrieval():
     manager = TableManager()
@@ -21,4 +21,4 @@ def test_table_assignment_and_retrieval():
     assert manager.get_user_table("B") == table1
     assert table1 != table4
     assert table4 == table6
-    assert manager.has_user(user5.get_username())
+    assert manager.has_user(user5.username)

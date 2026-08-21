@@ -1,10 +1,10 @@
-from src.model.game_structures import Card, Deck
+from game_server.game.model import Card, Deck
 
 def test_card_value():
     card = Card("K", "Hearts")
-    assert card.get_value() == 10
+    assert card.value == 10
     card = Card("A", "Hearts")
-    assert card.get_value() == 11
+    assert card.value == 11
 
 def test_deck_draw_card():
     deck = Deck()
