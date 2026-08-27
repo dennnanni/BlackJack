@@ -123,8 +123,10 @@ class Game:
             self.active_users.remove(user)
             self.finished_users.append(user)
 
-    def all_players_done(self):
-        return len(self.active_users) == 0
+    def restore_active_user(self, user):
+        if user in self.finished_users:
+            self.finished_users.remove(user)
+            self.active_users.append(user)
 
 class User:
     def __init__(self, username, balance):
@@ -134,6 +136,9 @@ class User:
 
     def add_card(self, card):
         self.hand.append(card)
+
+    def clear_hand(self):
+        self.hand = []
 
     def __str__(self):
         return f"User: {self.username}, Balance: {self.balance}, Hand: {self.hand}"

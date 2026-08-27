@@ -8,6 +8,12 @@ table_manager = TableManager()
 user_map = {}
 table_game_map = {}
 
+# Players who asked to skip rounds. Sitting out is not the same as not
+# betting: the loop does not deal them in and, above all, does not wait on
+# them, so the rest of the table starts as soon as *they* have bet instead of
+# sitting through the whole betting window.
+sitting_out = set()
+
 def register_event_handlers(socketio):
 
     @socketio.on("join")
@@ -44,6 +50,38 @@ def register_event_handlers(socketio):
             
         central_client.update_user_list(list(user_map.keys()))
 
+    @socketio.on('sit_out')
+    def handle_sit_out(data):
+        """Toggle sitting out. The flag can be set at any time but only takes
+        effect at a round boundary: nobody is pulled out of a hand they have
+        already been dealt, and nobody is dealt into one already running."""
+        username = data['username']
+        user = user_map.get(username)
+        table = table_manager.get_user_table(username)
+        if not user or not table:
+            emit('error', {'message': 'User not at any table'})
+            return
+
+        out = bool(data.get('sitting_out'))
+        sitting_out.add(username) if out else sitting_out.discard(username)
+
+        game, game_loop = table.game, table_game_map.get(table.id)
+        # Only the betting window is early enough to change the round that is
+        # already on the table; after that the change waits for the next one.
+        applies_now = not game or (game_loop is not None and game_loop.betting_open)
+        emit('seat_state', {'sitting_out': out, 'applies_now': applies_now})
+        if not applies_now or not game:
+            return
+
+        if out:
+            game.bets.pop(user, None)
+            game.remove_active_user(user)
+        else:
+            game.restore_active_user(user)
+        # The table no longer has to wait for a player who is not playing.
+        if game_loop and game.all_players_have_bet():
+            game_loop.bets_done_event.set()
+
     @socketio.on("bet")
     def handle_bet(data):
         username = data["username"]
@@ -74,22 +112,27 @@ def register_event_handlers(socketio):
     @socketio.on('player_action')
     def handle_player_action(data):
         username = data['username']
-        user = user_map[username]
-        action = data['action']  # 'hit', 'stand', 'double'
         table = table_manager.get_user_table(username)
-        game = table.game
-        
+
         if not table:
             emit("error", {"message": "User not at any table"})
             return
         room_id = f"table-{table.id}"
-        if not table.is_game_active():
+        game = table.game
+        if not game:
             emit("error", {"message": "No active game"}, to=room_id)
             return
 
-        user = next((u for u in game.active_users if u.username == username), None)
-        if not user:
+        # Turn order is enforced here: only the player the loop is currently
+        # waiting on may act. Anyone else is politely told to wait their turn.
+        game_loop = table_game_map.get(table.id)
+        current = game_loop.current_player if game_loop else None
+        if current is None or current.username != username:
+            emit("error", {"message": "It's not your turn yet"})
             return
+        user = current
+
+        action = data['action']  # 'hit', 'stand', 'double'
 
         if action == 'hit':
             card = game.deck.draw_card()
@@ -108,8 +151,13 @@ def register_event_handlers(socketio):
                 if Hand.is_busted(user.hand):
                     emit('player_busted', {'user': username}, to=room_id)
             except (ValueError, KeyError) as e:
-                emit('error', {'user': username, 'message': str(e)}, to=room_id)
-                
-        if table.game.all_players_done():
-            table_game_map.get(table.id).actions_done_event.set()
-            emit('player_action_done', to=room_id)
+                emit('error', {'user': username, 'message': str(e)})
+                return
+        else:
+            emit('error', {'message': f'Unknown action: {action}'})
+            return
+
+        # The turn ends the moment the player is no longer active (they stood,
+        # doubled or busted); a plain hit leaves them active to act again.
+        if user not in game.active_users:
+            game_loop.turn_done_event.set()

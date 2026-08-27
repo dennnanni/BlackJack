@@ -14,6 +14,8 @@ def test_user_hand():
     card2 = Card("Q", "Spades")
     user.add_card(card2)
     assert user.hand == [card, card2]
+    user.clear_hand()
+    assert user.hand == []
 
 def test_update_balance():
     user = User("Eve", 200)
