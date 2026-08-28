@@ -1,69 +1,60 @@
-import json
+"""HTTP client for everything this game server says to the central server.
+
+Every call carries a short-lived Bearer JWT signed with the SHARED_SECRET;
+after registration the token also carries this server's assigned id.
+"""
+import time
+
+import jwt
 import requests
-from game_server.encryption import encrypt_with_key, decrypt_with_key
+
+from game_server.config import CAPACITY, CENTRAL_URL, SHARED_SECRET
+from shared.messages import CAPACITY as CAPACITY_FIELD
+from shared.messages import (HOST, PORT, RESULTS, SERVER_ID, TYP,
+                             TYP_SERVER)
+
+SERVER_TOKEN_TTL = 60
 
 
-class CentralServerAPI:
-    def __init__(self, base_url: str):
+class CentralClient:
+    def __init__(self, base_url):
         self.base_url = base_url
+        self.server_id = None
 
-    def register_game_server(self, host: str, port: int, shared_key, new_key):
-        self.new_key = new_key
-        payload = {
-            "ip": host,
-            "port": port,
-            "key": self.new_key.decode()
-        }
+    def _bearer(self):
+        now = int(time.time())
+        # typ marks this as a *server* token: central refuses to accept a join
+        # token here, and a browser never holds one of these.
+        claims = {TYP: TYP_SERVER, 'iat': now, 'exp': now + SERVER_TOKEN_TTL}
+        if self.server_id is not None:
+            claims[SERVER_ID] = self.server_id
+        token = jwt.encode(claims, SHARED_SECRET, algorithm='HS256')
+        return {'Authorization': f'Bearer {token}'}
 
+    def register(self, host, port):
+        """Announce this server to central; stores the assigned server id."""
         try:
-            encrypted_data = encrypt_with_key(payload, shared_key)
-            response = requests.post(
-                f"{self.base_url}/register",
-                json={"encrypted": encrypted_data},
-                timeout=5
-            )
+            response = requests.post(f'{self.base_url}/api/servers/register',
+                                     json={HOST: host, PORT: port, CAPACITY_FIELD: CAPACITY},
+                                     headers=self._bearer(), timeout=5)
             response.raise_for_status()
-            encrypted_response = response.json().get("encrypted")
-            if encrypted_response:
-                decrypted_data = json.loads(decrypt_with_key(encrypted_response, self.new_key))
-                self.server_id = decrypted_data.get("server_id")
-            else:
-                raise ValueError("No encrypted field in response")
-            
+            self.server_id = response.json()[SERVER_ID]
             return True
-        except requests.RequestException as e:
-            print(f"[!] Errore registrazione server: {e}")
-            if e.response is not None:
-                print(f"[!] Codice risposta: {e.response.status_code}")
-                print(f"[!] Contenuto risposta: {e.response.text}")
+        except (requests.RequestException, KeyError, ValueError) as e:
+            print(f'[central] registration failed: {e}')
             return False
 
-    def send_results(self, results: list):
-        results_payload = [r.to_dict() for r in results]
-        payload = {"results": results_payload}
+    def send_results(self, results):
+        """Deliver one round's results; True only when central ACKed them."""
         try:
-            encrypted_data = encrypt_with_key(payload, self.new_key)
-            response = requests.post(
-                f"{self.base_url}/results",
-                json={"data": encrypted_data},
-                timeout=5
-            )
+            response = requests.post(f'{self.base_url}/api/servers/results',
+                                     json={RESULTS: [r.to_dict() for r in results]},
+                                     headers=self._bearer(), timeout=5)
             response.raise_for_status()
+            return True
         except requests.RequestException as e:
-            print(f"[!] Errore invio risultati: {e}")
+            print(f'[central] sending results failed: {e}')
+            return False
 
-    def update_user_list(self, users: list):
-        payload = {
-            "server_id": self.server_id,
-            "users": users
-        }
-        try:
-            encrypted_data = encrypt_with_key(payload, self.new_key)
-            response = requests.post(
-                f"{self.base_url}/users",
-                json={"data": encrypted_data},
-                timeout=5
-            )
-            response.raise_for_status()
-        except requests.RequestException as e:
-            print(f"[!] Errore aggiornamento lista utenti: {e}")
+
+client = CentralClient(CENTRAL_URL)

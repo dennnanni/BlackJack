@@ -21,19 +21,23 @@
         #bet-controls { display: none; }
         #log { font-size: .9em; max-height: 180px; overflow-y: auto; opacity: .85; }
         #log div { border-bottom: 1px solid rgba(255,255,255,.1); padding: 2px 0; }
+        .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     </style>
 </head>
 
 <body>
     <h1>Blackjack</h1>
 
-    <div class="zone" id="join-form">
-        <input id="username" placeholder="Username">
-        <input id="balance" placeholder="Balance" type="number">
-        <button onclick="joinGame()">Join a table</button>
+    {% if not username %}
+    <div class="zone">
+        <p>This is a Blackjack game server. Join a table through the central server.</p>
+    </div>
+    {% else %}
+    <div class="zone topbar">
+        <span><strong class="me">{{ username }}</strong> — balance: $<span id="balance">{{ balance }}</span></span>
     </div>
 
-    <div id="game-area" style="display:none;">
+    <div id="game-area">
         <div id="status" class="zone">Connecting to the table…</div>
 
         <div class="zone dealer">
@@ -67,8 +71,8 @@
 
     <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
     <script>
-        let me = "";
-        let balance = 0;
+        const me = "{{ username }}";
+        let balance = parseFloat("{{ balance }}");
         let sittingOut = false;
         let countdownTimer = null;
         const socket = io();
@@ -97,33 +101,25 @@
         }
 
         // --- Actions the player takes (these are what the buttons call) ---
-        function joinGame() {
-            const username = $("username").value;
-            const amount = parseFloat($("balance").value);
-            if (!username || !(amount > 0)) { alert("Enter a username and a balance."); return; }
-            me = username;
-            balance = amount;
-            socket.emit("join", { username, balance });
-        }
         function sendBet() {
             const amount = parseFloat($("bet-amount").value);
             if (!(amount > 0)) { setStatus("Enter a bet amount greater than 0."); return; }
             if (amount > balance) { setStatus("You can't bet more than your balance."); return; }
             $("bet-button").disabled = true;   // avoid double-submits; re-enabled next round
-            socket.emit("bet", { username: me, amount });
+            socket.emit("bet", { amount });
         }
         function sendAction(action) {
-            socket.emit("player_action", { username: me, action });
+            socket.emit("player_action", { action });
         }
         // Sitting out is a standing choice, not a per-round one: the table
         // stops dealing you in (and stops waiting for you) until you sit in.
         function toggleSit() {
-            socket.emit("sit_out", { username: me, sitting_out: !sittingOut });
+            socket.emit("sit_out", { sitting_out: !sittingOut });
         }
 
+        socket.on("connect", () => socket.emit("join"));
+
         socket.on("joined", data => {
-            $("join-form").style.display = "none";
-            $("game-area").style.display = "block";
             setStatus(data.is_player ? `Seated at ${data.table_id}. Waiting for the round to start…`
                                      : `Watching ${data.table_id}: a round is in progress, you play the next one.`);
         });
@@ -262,6 +258,7 @@
                 log(`${res.username} ${outcome}`);
                 if (res.username === me) {
                     balance += res.balance_difference;
+                    $("balance").innerText = balance.toFixed(2);
                     myOutcome = outcome;
                 }
             }
@@ -303,6 +300,7 @@
             }
         }
     </script>
+    {% endif %}
 </body>
 
 </html>

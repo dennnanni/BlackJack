@@ -7,6 +7,16 @@ ERROR = 'error'
 TOKEN = 'token'
 ENCRYPTED = 'encrypted'
 SERVER_ID = 'server_id'
+HOST = 'host'
+PORT = 'port'
+CAPACITY = 'capacity'
+RESULTS = 'results'
+# Token class. Both JWT kinds are HS256 over the same SHARED_SECRET, so
+# without this claim a *join* token — which the player's own browser holds —
+# is a structurally valid *server* token: it even carries a server_id.
+TYP = 'typ'
+TYP_JOIN = 'join'
+TYP_SERVER = 'server'
 
 
 @dataclass

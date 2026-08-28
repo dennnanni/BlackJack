@@ -1,8 +1,14 @@
+"""Socket.IO gameplay events.
+
+Identity comes from the Flask session that POST /join populated after
+verifying the signed join token: the client never supplies its own username
+or balance.
+"""
+from flask import session
 from flask_socketio import emit, join_room
-from flask_socketio import SocketIO
-from game_server.game.model import User, TableManager, Hand
+
+from game_server.game.model import Hand, TableManager, User
 from game_server.loop import GameLoop
-from game_server.app import central_client
 
 table_manager = TableManager()
 user_map = {}
@@ -14,17 +20,30 @@ table_game_map = {}
 # sitting through the whole betting window.
 sitting_out = set()
 
+
+def _room(table):
+    return f"table-{table.id}"
+
+
 def register_event_handlers(socketio):
 
+    def _session_user():
+        username = session.get('username')
+        if username is None:
+            emit('error', {'message': 'Join through the central server first'})
+            return None
+        return username
+
     @socketio.on("join")
-    def handle_join(data):
-        username = data["username"]
-        balance = data["balance"]
-        user = User(username, balance)
+    def handle_join():
+        username = _session_user()
+        if username is None:
+            return
+        user = User(username, session['balance'])
         user_map[username] = user
         table = table_manager.assign_user_to_table(user)
         
-        room_id = f"table-{table.id}"
+        room_id = _room(table)
         join_room(room_id)
         
         if table.is_ready_to_start():
@@ -47,15 +66,15 @@ def register_event_handlers(socketio):
                 },
                 'dealer_cards': [str(c) for c in table.game.dealer_hand]
             }, to=room_id)
-            
-        central_client.update_user_list(list(user_map.keys()))
 
     @socketio.on('sit_out')
     def handle_sit_out(data):
         """Toggle sitting out. The flag can be set at any time but only takes
         effect at a round boundary: nobody is pulled out of a hand they have
         already been dealt, and nobody is dealt into one already running."""
-        username = data['username']
+        username = _session_user()
+        if username is None:
+            return
         user = user_map.get(username)
         table = table_manager.get_user_table(username)
         if not user or not table:
@@ -84,18 +103,20 @@ def register_event_handlers(socketio):
 
     @socketio.on("bet")
     def handle_bet(data):
-        username = data["username"]
-        user = user_map[username]
-        table = table_manager.get_user_table(username)
+        username = _session_user()
+        if username is None:
+            return
 
-        if not table:
+        user = user_map.get(username)
+        table = table_manager.get_user_table(username)
+        if not user or not table:
             emit("error", {"message": "User not at any table"})
             return
-        room_id = f"table-{table.id}"
         game = table.game
         if not game:
-            emit("error", {"message": "No active game"}, to=room_id)
+            emit("error", {"message": "No active game"})
             return
+        room_id = _room(table)
 
         try:
             all_bet = game.place_bet(user, float(data["amount"]))
@@ -111,17 +132,19 @@ def register_event_handlers(socketio):
             
     @socketio.on('player_action')
     def handle_player_action(data):
-        username = data['username']
-        table = table_manager.get_user_table(username)
+        username = _session_user()
+        if username is None:
+            return
 
+        table = table_manager.get_user_table(username)
         if not table:
             emit("error", {"message": "User not at any table"})
             return
-        room_id = f"table-{table.id}"
         game = table.game
         if not game:
-            emit("error", {"message": "No active game"}, to=room_id)
+            emit("error", {"message": "No active game"})
             return
+        room_id = _room(table)
 
         # Turn order is enforced here: only the player the loop is currently
         # waiting on may act. Anyone else is politely told to wait their turn.

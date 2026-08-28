@@ -1,7 +1,7 @@
 from threading import Thread, Event
 from game_server.game.model import Deck, Game, Hand
 from game_server.app import socketio
-from game_server.app import central_client
+from game_server.central_client import client
 
 BET_WINDOW_SECONDS = 35
 TURN_WINDOW_SECONDS = 30
@@ -120,7 +120,7 @@ class GameLoop(Thread):
 
         # Fase 4: risultati e bilanci
         results = game.determine_result()
-        central_client.send_results(results)
+        client.send_results(results)
         socketio.emit('round_results', {
             'results': [r.to_dict() for r in results],
             'next_round_in': ROUND_RESULT_DELAY

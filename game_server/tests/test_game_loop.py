@@ -78,7 +78,7 @@ def loop_env(monkeypatch):
     sio = FakeSocketIO()
     central = FakeCentral()
     monkeypatch.setattr(loop_module, 'socketio', sio)
-    monkeypatch.setattr(loop_module, 'central_client', central)
+    monkeypatch.setattr(loop_module, 'client', central)
     monkeypatch.setattr(loop_module, 'Deck', _scripted_round)
     # Short windows so a missed wake-up fails fast instead of hanging the suite.
     monkeypatch.setattr(loop_module, 'BET_WINDOW_SECONDS', 2)
