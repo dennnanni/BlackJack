@@ -29,7 +29,8 @@ services:
     environment:
       SERVER_HOST: "127.0.0.1"
       SERVER_PORT: "8000"
-      CENTRAL_SERVER_URL: "http://central:5002/api/servers"
+      CENTRAL_URL: "http://central:5002"
+      CENTRAL_PUBLIC_URL: "http://localhost:5002"   # where "leave table" sends the browser
     env_file: .env
     depends_on:
       - central

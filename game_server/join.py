@@ -6,7 +6,7 @@ from flask import (Blueprint, jsonify, redirect, render_template, request,
                    session, url_for)
 
 from game_server.central_client import client
-from game_server.config import SHARED_SECRET
+from game_server.config import CENTRAL_PUBLIC_URL, SHARED_SECRET
 from shared.messages import TYP, TYP_JOIN
 
 game_bp = Blueprint('game', __name__)
@@ -38,13 +38,11 @@ def verify_join_token(token, expected_server_id):
 
 
 def _live_balance(username):
-    """The balance the table is playing with — it moves every round, while the
-    session only holds the snapshot the join token carried."""
-    from game_server.events import user_map
+    from game_server.events import last_balance, user_map
     user = user_map.get(username)
     if user:
         return user.balance
-    return session['balance']
+    return last_balance.get(username, session['balance'])
 
 
 @game_bp.route('/')
@@ -55,19 +53,26 @@ def index():
     if username is None:
         return render_template('index.html')
     return render_template('index.html', username=username,
-                           balance=f"{_live_balance(username):.2f}")
+                           balance=f"{_live_balance(username):.2f}",
+                           central_url=CENTRAL_PUBLIC_URL)
+
+
+@game_bp.route('/leave', methods=['POST'])
+def leave():
+    """Give up the seat and go back to central. POST, not a link: it changes
+    state, and a prefetched GET must never throw a player off their table."""
+    username = session.get('username')
+    if username:
+        from game_server.events import leave_table
+        leave_table(username)
+    session.clear()
+    return redirect(CENTRAL_PUBLIC_URL)
 
 
 @game_bp.route('/join', methods=['POST'])
 def join():
-    """Consume a one-shot join token, then redirect to the table page.
-
-    POST/redirect/GET on purpose: the token is valid for two minutes and can
-    only be spent once, so if the *response* to this POST were the table page
-    itself, every F5 would re-submit the spent token and answer with an error
-    instead of the game. After the redirect the browser sits on `/`, where a
-    reload is an ordinary GET.
-    """
+    """Consume a one-shot join token, then redirect to the table page."""
+    
     token = request.form.get('token')
     try:
         if not token:
@@ -80,4 +85,7 @@ def join():
     session['username'] = payload['sub']
     session['balance'] = float(payload['balance'])
     session.permanent = True
+
+    from game_server.events import last_balance
+    last_balance.pop(payload['sub'], None)  # central just told us the truth
     return redirect(url_for('game.index'))

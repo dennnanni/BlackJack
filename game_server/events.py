@@ -8,15 +8,59 @@ table_manager = TableManager()
 user_map = {}
 table_game_map = {}
 
-# Players who asked to skip rounds. Sitting out is not the same as not
-# betting: the loop does not deal them in and, above all, does not wait on
-# them, so the rest of the table starts as soon as *they* have bet instead of
-# sitting through the whole betting window.
+# Players who asked to skip rounds
 sitting_out = set()
+
+# Balance of a player who left the table, so that closing and reopening the
+# page does not rewind them to the snapshot their (older) join token carried.
+last_balance = {}
+
+# Players whose socket went away mid-round. They keep their seat until the
+# round they are in is over. They are unseated afterwards if they never came
+# back.
+absent = set()
 
 
 def _room(table):
     return f"table-{table.id}"
+
+
+def unseat(username):
+    """Remove a player from their table, remembering the balance they leave
+    with."""
+    user = user_map.pop(username, None)
+    if user is None:
+        return
+    table_manager.remove_user(user)
+    last_balance[username] = user.balance
+    absent.discard(username)
+    sitting_out.discard(username)
+
+
+def leave_table(username):
+    """A player pressed "Leave table"."""
+    
+    from game_server.app import socketio   # circular at import time
+
+    user = user_map.get(username)
+    if user is None:
+        return
+    table = table_manager.get_user_table(username)
+    game = table.game if table else None
+    if game and user in game.get_users():
+        game.forfeit(user)
+        game_loop = table_game_map.get(table.id)
+        if game_loop and game_loop.current_player is user:
+            game_loop.turn_done_event.set()   # don't hold the table for them
+        socketio.emit('player_left', {'user': username}, to=_room(table))
+    unseat(username)
+
+
+def reap_absent(table):
+    """Called by the loop between rounds: unseat the players of this table
+    whose socket never came back."""
+    for username in [u for u in absent if table_manager.get_user_table(u) is table]:
+        unseat(username)
 
 
 def register_event_handlers(socketio):
@@ -58,6 +102,7 @@ def register_event_handlers(socketio):
         username = _session_user()
         if username is None:
             return
+        absent.discard(username)   # they are back (or never really left)
 
         existing_user = user_map.get(username)
         existing_table = table_manager.get_user_table(username) if existing_user else None
@@ -65,7 +110,9 @@ def register_event_handlers(socketio):
             _resume(existing_user, existing_table)
             return
 
-        user = User(username, session['balance'])
+        # A player who left and came back keeps the balance they walked away
+        # with; the session snapshot is only right the first time.
+        user = User(username, last_balance.pop(username, session['balance']))
         user_map[username] = user
         table = table_manager.assign_user_to_table(user)
 
@@ -210,3 +257,18 @@ def register_event_handlers(socketio):
         # doubled or busted); a plain hit leaves them active to act again.
         if user not in game.active_users:
             game_loop.turn_done_event.set()
+
+    @socketio.on('disconnect')
+    def handle_disconnect():
+        username = session.get('username')
+        if username is None or username not in user_map:
+            return
+        user = user_map[username]
+        table = table_manager.get_user_table(username)
+        if table and table.is_game_active() and user in table.game.get_users():
+            # Mid-round: leave the user in place; the round finishes for them
+            # via auto-stand and their result is still reported to central.
+            # The loop unseats them after the round unless they reconnect
+            absent.add(username)
+            return
+        unseat(username)

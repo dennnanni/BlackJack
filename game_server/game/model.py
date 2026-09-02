@@ -47,6 +47,7 @@ class Game:
         self.active_users: list[User] = players
         self.bets: dict[User, float] = {}
         self.finished_users: list[User] = []
+        self.forfeited: list[User] = []
         self.deck = deck
 
     def get_users(self):
@@ -83,6 +84,8 @@ class Game:
         return results
 
     def _determine_difference(self, user):
+        if user in self.forfeited:
+            return -self.bets[user]
         if Hand.is_busted(user.hand):
             return -self.bets[user]
         if self._is_winner(user):
@@ -116,6 +119,13 @@ class Game:
         return card
 
     def player_stand(self, user):
+        self.remove_active_user(user)
+
+    def forfeit(self, user):
+        """L'utente se n'e' andato a meta' round: non partecipa oltre e perde
+        la puntata qualunque cosa dicessero le carte. Il risultato viene
+        comunque calcolato e inviato: i soldi devono tornare."""
+        self.forfeited.append(user)
         self.remove_active_user(user)
 
     def remove_active_user(self, user):
@@ -241,6 +251,12 @@ class TableManager:
         self.tables.append(new_table)
         self.user_table_map[user.username] = new_table
         return new_table
+
+    def remove_user(self, user: User):
+        table = self.user_table_map.pop(user.username, None)
+        if table:
+            table.remove_user(user)
+        return table
 
     def get_user_table(self, username):
         return self.user_table_map.get(username)

@@ -132,9 +132,11 @@ class GameLoop(Thread):
         self._end_round()
 
     def _end_round(self):
-        """Smonta il round: gli observer diventano giocatori e il tavolo torna
-        libero per il round successivo."""
+        """Smonta il round e lascia partire il prossimo: gli observer diventano
+        giocatori e chi non si e' piu' fatto vivo lascia il posto."""
+        from game_server.events import reap_absent  # circolare a import time
         self.table.clear_game()
+        reap_absent(self.table)
 
     def _run_turn(self, game, user):
         """Da' il tavolo a un giocatore finche' non sta, raddoppia, sballa o
