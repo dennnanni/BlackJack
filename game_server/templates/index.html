@@ -124,6 +124,51 @@
                                      : `Watching ${data.table_id}: a round is in progress, you play the next one.`);
         });
 
+        // A reconnect (page reload) lands here instead of "joined": the
+        // server sends back whatever state exists so the page doesn't just
+        // show blank zones until the next event happens to fire.
+        socket.on("resumed", data => {
+            balance = data.balance;
+            $("balance").innerText = balance.toFixed(2);
+            sittingOut = data.sitting_out;
+            $("sit-toggle").innerText = sittingOut ? "Sit in" : "Sit out";
+
+            if (!data.in_round) {
+                showBetControls(false);
+                showActions(false);
+                setStatus(sittingOut ? "You are sitting out. Press “Sit in” to play the next round."
+                                     : "Reconnected. Waiting for the next round…");
+                return;
+            }
+
+            $("dealer-cards").innerHTML = renderCards(data.dealer_cards);
+            $("players-area").innerHTML = "";
+            for (const user in data.hands) {
+                const div = document.createElement("div");
+                div.className = "player" + (user === me ? " me" : "");
+                div.innerHTML = `<strong>${user}</strong>: <span class="hand">${renderCards(data.hands[user])}</span>`;
+                div.id = `hand-${user}`;
+                $("players-area").appendChild(div);
+            }
+
+            if (data.your_turn) {
+                highlightTurn(me);
+                showActions(true);
+                $("double-button").style.display = data.hand.length > 2 ? "none" : "inline";
+                showBetControls(false);
+                setStatus("Your turn: hit, stand or double down.");
+            } else if (data.betting_open && data.bet_amount == null && !sittingOut) {
+                showActions(false);
+                showBetControls(true);
+                setStatus("Place your bet to join this round — or sit it out and stake nothing.");
+            } else {
+                showActions(false);
+                showBetControls(false);
+                setStatus(data.bet_amount != null ? "Reconnected. Waiting for the round to continue…"
+                                                  : "Reconnected: watching this round.");
+            }
+        });
+
         socket.on("game_starting", () => {
             clearCountdown();
             setStatus("Round starting…");

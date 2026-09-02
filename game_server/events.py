@@ -1,9 +1,3 @@
-"""Socket.IO gameplay events.
-
-Identity comes from the Flask session that POST /join populated after
-verifying the signed join token: the client never supplies its own username
-or balance.
-"""
 from flask import session
 from flask_socketio import emit, join_room
 
@@ -34,18 +28,50 @@ def register_event_handlers(socketio):
             return None
         return username
 
+    def _resume(user, table):
+        """Puts a reconnecting client back where it was instead of dealing
+        it a second seat at another table."""
+        room_id = _room(table)
+        join_room(room_id)
+
+        game = table.game
+        game_loop = table_game_map.get(table.id)
+        payload = {
+            'table_id': table.id,
+            'balance': user.balance,
+            'sitting_out': user.username in sitting_out,
+            'hand': [str(c) for c in user.hand],
+            'in_round': game is not None,
+        }
+        if game:
+            payload['dealer_cards'] = [str(c) for c in game.dealer_hand]
+            payload['hands'] = {
+                u.username: [str(c) for c in u.hand] for u in table.users
+            }
+            payload['betting_open'] = bool(game_loop and game_loop.betting_open)
+            payload['your_turn'] = bool(game_loop and game_loop.current_player is user)
+            payload['bet_amount'] = game.bets.get(user)
+        emit('resumed', payload)
+
     @socketio.on("join")
     def handle_join():
         username = _session_user()
         if username is None:
             return
+
+        existing_user = user_map.get(username)
+        existing_table = table_manager.get_user_table(username) if existing_user else None
+        if existing_user and existing_table:
+            _resume(existing_user, existing_table)
+            return
+
         user = User(username, session['balance'])
         user_map[username] = user
         table = table_manager.assign_user_to_table(user)
-        
+
         room_id = _room(table)
         join_room(room_id)
-        
+
         if table.is_ready_to_start():
             table_id = table.id
             existing_loop = table_game_map.get(table_id)
@@ -147,7 +173,7 @@ def register_event_handlers(socketio):
         room_id = _room(table)
 
         # Turn order is enforced here: only the player the loop is currently
-        # waiting on may act. Anyone else is politely told to wait their turn.
+        # waiting on may act.
         game_loop = table_game_map.get(table.id)
         current = game_loop.current_player if game_loop else None
         if current is None or current.username != username:

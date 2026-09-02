@@ -159,6 +159,7 @@ class Deck:
 
 class Card:
     SUITS = ['Hearts', 'Diamonds', 'Clubs', 'Spades']
+    SUIT_SYMBOLS = ['♥', '♦', '♣', '♠']
     TYPES = ['A', '2', '3', '4', '5', '6', '7', '8', '9', '10', 'J', 'Q', 'K']
     VALUES = {
         'A': 11,
@@ -178,7 +179,7 @@ class Card:
         self.value = self.VALUES[self.type]
 
     def __str__(self):
-        return f"{self.type}{self.suit}"
+        return f"{self.type}{self.SUIT_SYMBOLS[self.suit]}"
 
     def __repr__(self):
         return self.__str__()
