@@ -8,10 +8,11 @@ import time
 import jwt
 import requests
 
-from game_server.config import CAPACITY, CENTRAL_URL, SHARED_SECRET
+from game_server.config import (CAPACITY, CENTRAL_URL, LEASE_TIMEOUT,
+                                SHARED_SECRET)
 from shared.messages import CAPACITY as CAPACITY_FIELD
-from shared.messages import (HOST, PORT, RESULTS, SERVER_ID, TYP,
-                             TYP_SERVER)
+from shared.messages import (HOST, PLAYERS, PORT, RESULTS, ROUND_ID, SERVER_ID,
+                             TYP, TYP_SERVER)
 
 SERVER_TOKEN_TTL = 60
 
@@ -20,6 +21,16 @@ class CentralClient:
     def __init__(self, base_url):
         self.base_url = base_url
         self.server_id = None
+        # Time since central last confirmed us. Monotonic on purpose: we never
+        # assume our clock agrees with central's, only that time passes here.
+        self._last_contact = time.monotonic()
+
+    def lease_valid(self):
+        """True while we may still stake our players' balances: with
+        LEASE_TIMEOUT < SEAT_TAKEOVER_TTL the lease dies here before central
+        can reassign those seats, so two servers never stake the same balance.
+        """
+        return time.monotonic() - self._last_contact < LEASE_TIMEOUT
 
     def _bearer(self):
         now = int(time.time())
@@ -39,21 +50,37 @@ class CentralClient:
                                      headers=self._bearer(), timeout=5)
             response.raise_for_status()
             self.server_id = response.json()[SERVER_ID]
+            self._last_contact = time.monotonic()
             return True
         except (requests.RequestException, KeyError, ValueError) as e:
             print(f'[central] registration failed: {e}')
             return False
 
-    def send_results(self, results):
+    def heartbeat(self, players):
+        try:
+            response = requests.post(f'{self.base_url}/api/servers/heartbeat',
+                                     json={PLAYERS: players},
+                                     headers=self._bearer(), timeout=5)
+            if response.ok:
+                # Only a 200 renews the lease. A 404 means central answered but
+                # no longer holds our players' seats, which is just as bad as
+                # not reaching it.
+                self._last_contact = time.monotonic()
+            return response.status_code
+        except requests.RequestException:
+            return None
+
+    def send_results(self, round_id, results):
         """Deliver one round's results; True only when central ACKed them."""
         try:
             response = requests.post(f'{self.base_url}/api/servers/results',
-                                     json={RESULTS: [r.to_dict() for r in results]},
+                                     json={ROUND_ID: round_id,
+                                           RESULTS: [r.to_dict() for r in results]},
                                      headers=self._bearer(), timeout=5)
             response.raise_for_status()
             return True
         except requests.RequestException as e:
-            print(f'[central] sending results failed: {e}')
+            print(f'[central] sending results for round {round_id} failed: {e}')
             return False
 
 

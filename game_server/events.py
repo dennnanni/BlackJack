@@ -21,6 +21,12 @@ last_balance = {}
 absent = set()
 
 
+def seated_players():
+    """Usernames seated here. Central reads it as our load and as the renewal
+    of these players' seat leases."""
+    return list(user_map)
+
+
 def _room(table):
     return f"table-{table.id}"
 

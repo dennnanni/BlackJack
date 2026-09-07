@@ -1,6 +1,7 @@
 from threading import Thread, Event
+from uuid import uuid4
 from game_server.game.model import Deck, Game, Hand
-from game_server.app import socketio
+from game_server.app import outbox, socketio
 from game_server.central_client import client
 
 BET_WINDOW_SECONDS = 35
@@ -13,6 +14,7 @@ DEALER_DRAW_DELAY = 1.2     # between each dealer card, so the hand builds up vi
 POST_DEALER_DELAY = 2.0     # let the finished dealer hand sink in
 ROUND_RESULT_DELAY = 7      # show the outcome and final hands before the table resets
 
+LEASE_CHECK_SECONDS = 1    # ogni quanto un tavolo congelato ricontrolla il lease
 IDLE_ROUND_SECONDS = 3
 
 class GameLoop(Thread):
@@ -32,10 +34,29 @@ class GameLoop(Thread):
 
     def run(self):
         # Keep offering rounds for as long as anyone is seated. Each iteration
-        # is a full round; nothing here waits for a human to restart it.
+        # is a full round; nothing here waits for a human to restart it, only
+        # the lease can hold the next one back.
         while self.table.is_ready_to_start():
+            self._await_lease()
+            if not self.table.is_ready_to_start():
+                break  # se ne sono andati tutti mentre il tavolo era congelato
             self._play_round()
         self.running = False
+
+    def _await_lease(self):
+        """Congela i nuovi round finché il lease è scaduto.
+
+        Evita di impegnare i fondi dei giocatori se perdiamo la connessione col centro 
+        (che potrebbe riassegnare i posti). Il tavolo va in pausa senza espellere nessuno 
+        e riparte da solo al ripristino. I round già in corso vengono sempre conclusi 
+        regolarmente e inviati all'outbox."""
+        if client.lease_valid():
+            return
+        socketio.emit('lease_expired', {'table': self.table.id}, to=self.room_id)
+        while not client.lease_valid() and self.table.is_ready_to_start():
+            socketio.sleep(LEASE_CHECK_SECONDS)
+        if client.lease_valid():
+            socketio.emit('lease_restored', {'table': self.table.id}, to=self.room_id)
 
     def _play_round(self):
         self.bets_done_event.clear()
@@ -77,9 +98,13 @@ class GameLoop(Thread):
             self._end_round()
             return
 
+        # Ricontrolliamo il lease prima che le puntate diventino reali. 
+        if not client.lease_valid():
+            self._end_round()
+            return
+
         # Fase 1: distribuzione iniziale. Due carte a chi ha puntato, poi la
-        # carta scoperta del dealer: cosi' si decide contro qualcosa invece che
-        # al buio. Niente carta coperta, il dealer pesca il resto nella fase 4.
+        # carta scoperta del dealer
         for user in game.active_users:
             user.clear_hand()
             user.add_card(deck.draw_card())
@@ -118,16 +143,17 @@ class GameLoop(Thread):
         }, to=self.room_id)
         socketio.sleep(POST_DEALER_DELAY)
 
-        # Fase 4: risultati e bilanci
+        # Fase 4: risultati e bilanci. Prima si scrive nell'outbox
+        # poi si avvisa il tavolo
         results = game.determine_result()
-        client.send_results(results)
+        outbox.enqueue(str(uuid4()), results)
         socketio.emit('round_results', {
             'results': [r.to_dict() for r in results],
             'next_round_in': ROUND_RESULT_DELAY
         }, to=self.room_id)
 
         # Fase 5: lascia il tempo di guardare l'esito e le mani finali, poi
-        # smonta il round; il while esterno fa partire il prossimo.
+        # smonta il round
         socketio.sleep(ROUND_RESULT_DELAY)
         self._end_round()
 
@@ -145,8 +171,7 @@ class GameLoop(Thread):
             return
         username = user.username
 
-        # Una mano che vale gia' 21 (blackjack compreso) non puo' migliorare:
-        # stand automatico invece di aspettare un'azione che non arrivera'.
+        # Una mano che vale gia' 21 (blackjack compreso) perciò stand automatico
         if Hand.get_hand_value(user.hand) >= Hand.BLACKJACK:
             game.player_stand(user)
             socketio.emit('user_stood', {'user': username}, to=self.room_id)

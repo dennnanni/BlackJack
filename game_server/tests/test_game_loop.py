@@ -1,10 +1,3 @@
-"""The GameLoop drives a round turn by turn.
-
-Socket.IO and the central client are faked; the "player" side is simulated the
-way the real event handlers do it (place a bet, then stand on your turn). This
-locks in the two behaviours the UI depends on: strict one-player-at-a-time
-turns, and an automatic next round with no page reload.
-"""
 import threading
 import time
 
@@ -46,12 +39,12 @@ class FakeSocketIO:
         raise AssertionError(f"'{name}' (occurrence {after}) never emitted; saw {self.names()}")
 
 
-class FakeCentral:
+class FakeOutbox:
     def __init__(self):
-        self.sent = []
+        self.enqueued = []
 
-    def send_results(self, results):
-        self.sent.append(results)
+    def enqueue(self, round_id, results):
+        self.enqueued.append((round_id, results))
 
 
 class StackedDeck:
@@ -76,9 +69,9 @@ def _scripted_round():
 @pytest.fixture
 def loop_env(monkeypatch):
     sio = FakeSocketIO()
-    central = FakeCentral()
+    box = FakeOutbox()
     monkeypatch.setattr(loop_module, 'socketio', sio)
-    monkeypatch.setattr(loop_module, 'client', central)
+    monkeypatch.setattr(loop_module, 'outbox', box)
     monkeypatch.setattr(loop_module, 'Deck', _scripted_round)
     # Short windows so a missed wake-up fails fast instead of hanging the suite.
     monkeypatch.setattr(loop_module, 'BET_WINDOW_SECONDS', 2)
@@ -88,11 +81,11 @@ def loop_env(monkeypatch):
     monkeypatch.setattr(loop_module, 'DEALER_DRAW_DELAY', 0)
     monkeypatch.setattr(loop_module, 'POST_DEALER_DELAY', 0)
     monkeypatch.setattr(loop_module, 'ROUND_RESULT_DELAY', 0)
-    return sio, central
+    return sio, box
 
 
 def test_turn_based_round_then_automatic_restart(loop_env):
-    sio, central = loop_env
+    sio, box = loop_env
     u1, u2 = User('u1', 1000), User('u2', 1000)
     table = Table('t1')
     table.add_user(u1)
@@ -131,7 +124,7 @@ def test_turn_based_round_then_automatic_restart(loop_env):
         results = sio.wait_for('round_results')['results']
         assert {r['username'] for r in results} == {'u1', 'u2'}
         assert all(r['balance_difference'] == -10 for r in results)  # 17,18 < 19
-        assert central.sent
+        assert len(box.enqueued) == 1  # persisted before it was announced
 
         # Round 2 begins on its own — no reload, no manual restart.
         sio.wait_for('place_bets', after=1)
@@ -150,7 +143,7 @@ def test_a_player_sitting_out_is_not_dealt_in_nor_waited_for(loop_env):
     """The point of sitting out: the others do not sit through the betting
     window waiting for someone who is not playing."""
     import game_server.events as events
-    sio, central = loop_env
+    sio, box = loop_env
     player, sitter = User('player', 1000), User('sitter', 1000)
     table = Table('t3')
     table.add_user(player)
@@ -187,7 +180,7 @@ def test_a_player_sitting_out_is_not_dealt_in_nor_waited_for(loop_env):
 
 def test_a_table_where_everyone_sits_out_idles_instead_of_dealing(loop_env, monkeypatch):
     import game_server.events as events
-    sio, central = loop_env
+    sio, box = loop_env
     monkeypatch.setattr(loop_module, 'IDLE_ROUND_SECONDS', 0.05)
     sitter = User('sitter', 1000)
     table = Table('t4')

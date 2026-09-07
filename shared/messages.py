@@ -10,6 +10,8 @@ SERVER_ID = 'server_id'
 HOST = 'host'
 PORT = 'port'
 CAPACITY = 'capacity'
+PLAYERS = 'players'  # usernames seated on a game server; its load is their count
+ROUND_ID = 'round_id'
 RESULTS = 'results'
 # Token class. Both JWT kinds are HS256 over the same SHARED_SECRET, so
 # without this claim a *join* token — which the player's own browser holds —
@@ -17,6 +19,9 @@ RESULTS = 'results'
 TYP = 'typ'
 TYP_JOIN = 'join'
 TYP_SERVER = 'server'
+USERNAME = 'username'
+BALANCE = 'balance'
+BALANCE_DIFFERENCE = 'balance_difference'
 
 
 @dataclass
@@ -41,3 +46,8 @@ class Result:
 
     def to_dict(self):
         return asdict(self)
+
+    @staticmethod
+    def from_dict(data):
+        return Result(username=data[USERNAME],
+                      balance_difference=float(data[BALANCE_DIFFERENCE]))

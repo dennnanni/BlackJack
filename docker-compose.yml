@@ -31,6 +31,9 @@ services:
       SERVER_PORT: "8000"
       CENTRAL_URL: "http://central:5002"
       CENTRAL_PUBLIC_URL: "http://localhost:5002"   # where "leave table" sends the browser
+      # Temporary
+      HEARTBEAT_INTERVAL: "3600"
+      LEASE_TIMEOUT: "86400"
     env_file: .env
     depends_on:
       - central
