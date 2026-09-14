@@ -2,7 +2,7 @@
 from http import HTTPStatus
 from central_server import db
 from central_server import auth
-from shared.messages import CAPACITY, ERROR, SERVER_ID, SUCCESS, RESULTS, HOST, PORT, PLAYERS, Result
+from shared.messages import CAPACITY, ERROR, ROUND_ID, SERVER_ID, SUCCESS, RESULTS, HOST, PORT, PLAYERS, Result
 from flask import Blueprint, jsonify, request
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/servers')
@@ -27,12 +27,15 @@ def results():
         return jsonify({ERROR: 'Missing or invalid server token'}), HTTPStatus.UNAUTHORIZED
 
     data = request.get_json(silent=True) or {}
+    round_id = data[ROUND_ID]
+    if not round_id:
+        jsonify({ERROR: 'round_id is requires'}), HTTPStatus.BAD_REQUEST
     try:
         results = [Result.from_dict(r) for r in data[RESULTS]]
     except:
         return jsonify({ERROR: 'Malformed results payload'}), HTTPStatus.BAD_REQUEST
 
-    db.update_users_balance(results)
+    db.apply_round(round_id, results)
     return jsonify({SUCCESS: True}), HTTPStatus.OK
 
 @api_bp.route('/heartbeat', methods=['POST'])

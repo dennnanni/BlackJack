@@ -38,6 +38,12 @@ class Seat(Base):
     server_id = Column(Integer, nullable=False)
     since = Column(Float, nullable=False)
 
+# keeps the list of rounds that have already been applied to avoid duplicates
+class AppliedRound(Base):
+    __tablename__ = 'applied_round'
+
+    round_id = Column(String, primary_key=True)
+    applied_at = Column(Float, nullable=False)
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -111,11 +117,14 @@ def take_seat(username, server_id):
         return True
 
 
-def update_users_balance(results):
-    """Apply each result's balance change to its player."""
+def apply_round(round_id, results):
+    """Apply each result's balance change to its player exactly once."""
     with SessionLocal() as session:
+        if session.get(AppliedRound, round_id) is not None:
+            return
         for result in results:
             user = session.get(User, result.username)
             if user:
                 user.balance += Decimal(str(result.balance_difference))
+        session.add(AppliedRound(round_id=round_id, applied_at=time.time()))
         session.commit()
