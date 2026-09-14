@@ -6,7 +6,7 @@ import time
 
 import jwt
 from central_server.config import JOIN_TOKEN_TTL, SHARED_SECRET
-from shared.messages import TYP_JOIN
+from shared.messages import TYP, TYP_JOIN, TYP_SERVER
 
 
 def create_join_token(username, balance, server):
@@ -27,9 +27,11 @@ def verify_server_token(auth_header):
     if not auth_header or not auth_header.startswith('Bearer '):
         return None
     try: 
-        return jwt.decode(auth_header[7:], SHARED_SECRET, algorithms=['HS256'])
+        payload = jwt.decode(auth_header[7:], SHARED_SECRET, algorithms=['HS256'])
     except:
         return None
+
+    return payload if payload.get(TYP) == TYP_SERVER else None
 
 
 def get_hashed_password(password, salt):

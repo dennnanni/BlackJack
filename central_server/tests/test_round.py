@@ -43,7 +43,7 @@ def test_results_endpoint_applies_once(session_db, sample_user):
     client = app.test_client()
 
     now = int(time.time())
-    bearer = jwt.encode({'server_id': 1, 'iat': now, 'exp': now + 60},
+    bearer = jwt.encode({'typ': 'server', 'server_id': 1, 'iat': now, 'exp': now + 60},
                         'test-secret', algorithm='HS256')
     payload = {'round_id': 'round-http',
                'results': [{'username': USERNAME, 'balance_difference': -250.0}]}
@@ -68,7 +68,7 @@ def test_results_endpoint_rejects_bad_tokens(session_db, sample_user):
     assert response.status_code == 401
 
     now = int(time.time())
-    forged = jwt.encode({'server_id': 1, 'iat': now, 'exp': now + 60},
+    forged = jwt.encode({'typ': 'server', 'server_id': 1, 'iat': now, 'exp': now + 60},
                         'wrong-secret', algorithm='HS256')
     response = client.post('/api/servers/results', json=payload,
                            headers={'Authorization': f'Bearer {forged}'})
