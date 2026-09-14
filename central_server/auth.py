@@ -8,12 +8,13 @@ import jwt
 from central_server.config import JOIN_TOKEN_TTL, SHARED_SECRET
 
 
-def create_token(username, balance, server):
+def create_token(username, balance, server, type):
     now = int(time.time())
     # token generation to be used for authentication to the game server
     token = {
-        'username': username,
+        'sub': username,
         'balance': float(balance),
+        'typ': type,
         'iat': now,
         'exp': now + JOIN_TOKEN_TTL,  # add token validity period
         'server_id': server.id

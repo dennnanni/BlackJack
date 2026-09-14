@@ -7,7 +7,8 @@ from flask import (Blueprint, redirect, render_template, request, session)
 from flask_login import (UserMixin, current_user, login_required, login_user)
 
 from central_server import auth, db
-from central_server.config import INITIAL_BALANCE
+from central_server.config import HEARTBEAT, INITIAL_BALANCE
+from shared.messages import TYP_JOIN
 
 # Path to external API
 JOIN_TABLE_API_ENDPOINT = '/join'
@@ -124,11 +125,11 @@ def play():
     if user.balance <= 0:
         return _render_home(user, error='Your balance is zero: add funds to play')
 
-    server = _pick_game_server()
-    if server is None:
+    available_servers = db.get_alive_servers()
+    if not available_servers:
         return _render_home(user, error='No game server is available right now, try again later')
 
-    token = auth.create_token(user.username, user.balance, server)
-    return render_template('dispatch.html',
-                           join_url=server.get_url() + JOIN_TABLE_API_ENDPOINT,
-                           token=token)
+    chosen_server = min(available_servers, key=lambda s: s.load)
+    token = auth.create_token(user.username, user.balance, chosen_server, TYP_JOIN)
+    join_url = f'http://{chosen_server.host}:{chosen_server.port}/join'
+    return render_template('dispatch.html', join_url=join_url, token=token)

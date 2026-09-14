@@ -18,4 +18,6 @@ SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_hex(32))
 # validity period for the join token in seconds
 JOIN_TOKEN_TTL = 120
 
+HEARTBEAT = 15
+
 INITIAL_BALANCE = 1000

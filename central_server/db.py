@@ -1,11 +1,12 @@
 """Database layer of the central server."""
 from decimal import Decimal
+import time
 
-from sqlalchemy import (Column, ForeignKey, Integer, Numeric, String, Table,
+from sqlalchemy import (Column, Float, ForeignKey, Integer, Numeric, String, Table,
                         create_engine, func, literal)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-from central_server.config import DATABASE_URL
+from central_server.config import DATABASE_URL, HEARTBEAT
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
@@ -36,7 +37,9 @@ class GameServer(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     host = Column(String, nullable=False)
     port = Column(Integer, nullable=False)
-    capacity = Column(Integer, nullable=False)
+    capacity = Column(Integer, nullable=False, default=10)
+    load = Column(Integer, nullable=False, default=0)
+    last_seen = Column(Float, nullable=False, default=0.0)
 
     users = relationship("User", secondary=userservers, back_populates="servers")
 
@@ -56,31 +59,35 @@ def get_user(username):
         return session.get(User, username)
 
 
-def get_servers_with_user_count():
-    """Every registered server with the number of players connected to it and
-    the maximum it accepts."""
-    with SessionLocal() as session:
-        return session.query(
-            GameServer.id,
-            GameServer.host,
-            GameServer.port,
-            func.count(User.username).label('connected_users'),
-            literal(10).label('max_users')
-        ).outerjoin(
-            userservers, GameServer.id == userservers.c.idserver
-        ).outerjoin(
-            User, userservers.c.username == User.username
-        ).group_by(GameServer).all()
-
-
 def register_server(host, port, capacity):
     """Insert a new game server; returns its assigned id."""
     with SessionLocal() as session:
-        server = GameServer(host=host, port=port, capacity=capacity)
+        server = GameServer(host=host, port=port, capacity=capacity, last_seen=time.time())
         session.add(server)
         session.commit()
         return server.id
-    
+
+
+def update_heartbeat(server_id, players):
+    with SessionLocal() as session:
+        server = session.get(GameServer, server_id)
+        if server is None:
+            return False
+
+        server.load = len(players)
+        server.last_seen = time.time()
+        session.commit()
+
+        return True
+
+
+def get_alive_servers():
+    with SessionLocal() as session:
+        return session.query(GameServer).filter(
+            GameServer.last_seen >= time.time() - HEARTBEAT,
+            GameServer.load < GameServer.capacity
+        ).all()
+
 
 def update_users_balance(results):
     """Apply each result's balance change to its player."""
