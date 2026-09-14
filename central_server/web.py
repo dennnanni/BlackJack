@@ -4,7 +4,7 @@ game server. Plain HTTP only: the central server has no Socket.IO.
 from dataclasses import dataclass
 
 from flask import (Blueprint, redirect, render_template, request, session)
-from flask_login import (UserMixin, current_user, login_required, login_user)
+from flask_login import (UserMixin, current_user, login_required, login_user, logout_user)
 
 from central_server import auth, db
 from central_server.config import INITIAL_BALANCE
@@ -70,7 +70,7 @@ def home(username):
         return redirect(f'/user/{current_user.username}')
     user = db.get_user(current_user.username)
     if user is None:
-        session.clear()
+        logout_user()
         return redirect('/login')
     return _render_home(user)
 
@@ -110,7 +110,7 @@ def register_post():
 @web_bp.route('/logout', methods=['POST'])
 @login_required
 def logout():
-    session.clear()
+    logout_user()
     return redirect('/login')
 
 
@@ -119,7 +119,7 @@ def logout():
 def play():
     user = db.get_user(current_user.username)
     if user is None:
-        session.clear()
+        logout_user()
         return redirect('/login')
     if user.balance <= 0:
         return _render_home(user, error='Your balance is zero: add funds to play')
