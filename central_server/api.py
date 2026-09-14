@@ -2,7 +2,7 @@
 from http import HTTPStatus
 from central_server import db
 from central_server import auth
-from shared.messages import ERROR, SERVER_ID, SUCCESS, RESULTS, HOST, PORT, Result, Server
+from shared.messages import ERROR, SERVER_ID, SUCCESS, RESULTS, HOST, PORT, Result
 from flask import Blueprint, jsonify, request
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/servers')

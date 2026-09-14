@@ -75,7 +75,7 @@ def get_servers_with_user_count():
 def register_server(host, port):
     """Insert a new game server; returns its assigned id."""
     with SessionLocal() as session:
-        server = GameServer(host, port)
+        server = GameServer(host=host, port=port)
         session.add(server)
         session.commit()
         return server.id

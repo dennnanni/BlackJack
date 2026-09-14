@@ -21,7 +21,7 @@ def create_token(username, balance, server):
 
     return jwt.encode(token, SHARED_SECRET, algorithm='HS256')
 
-def verify_token(auth_header):
+def verify_server_token(auth_header):
     if not auth_header or not auth_header.startswith('Bearer '):
         return None
     try: 
