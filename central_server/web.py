@@ -88,7 +88,7 @@ def login_post():
     if auth.get_hashed_password(password, user.salt) != user.password:
         return render_template('access.html', login=True, error=f'Wrong password for user {username}')
 
-    login_user(UserSession(username))
+    login_user(UserSession(username), remember=True)
     return redirect(f'/user/{username}')
 
 
