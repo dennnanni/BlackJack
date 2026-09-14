@@ -34,9 +34,8 @@ class GameServer(Base):
     __tablename__ = 'gameserver'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    ip = Column(String, nullable=False)
+    host = Column(String, nullable=False)
     port = Column(Integer, nullable=False)
-    key = Column(String, nullable=False)
 
     users = relationship("User", secondary=userservers, back_populates="servers")
 
@@ -62,11 +61,10 @@ def get_servers_with_user_count():
     with SessionLocal() as session:
         return session.query(
             GameServer.id,
-            GameServer.ip,
+            GameServer.host,
             GameServer.port,
             func.count(User.username).label('connected_users'),
-            literal(10).label('max_users'),
-            GameServer.key
+            literal(10).label('max_users')
         ).outerjoin(
             userservers, GameServer.id == userservers.c.idserver
         ).outerjoin(
@@ -74,20 +72,14 @@ def get_servers_with_user_count():
         ).group_by(GameServer).all()
 
 
-def register_server(server):
+def register_server(host, port):
     """Insert a new game server; returns its assigned id."""
     with SessionLocal() as session:
+        server = GameServer(host, port)
         session.add(server)
         session.commit()
         return server.id
-
-
-def get_server_key(server_id):
-    """The key of a registered server, or None if there is no such server."""
-    with SessionLocal() as session:
-        server = session.get(GameServer, server_id)
-        return server.key if server else None
-
+    
 
 def update_users_balance(results):
     """Apply each result's balance change to its player."""

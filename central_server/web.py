@@ -27,14 +27,13 @@ class UserSession(UserMixin):
 class ServerLoad:
     """A registered game server together with how many players it holds."""
     id: int
-    ip: str
+    host: str
     port: int
     connected_users: int
     max_users: int
-    key: str
 
     def get_url(self):
-        return f'http://{self.ip}:{self.port}'
+        return f'http://{self.host}:{self.port}'
 
 
 def _pick_game_server():
@@ -129,7 +128,7 @@ def play():
     if server is None:
         return _render_home(user, error='No game server is available right now, try again later')
 
-    token = auth.create_token(user.username, server)
+    token = auth.create_token(user.username, user.balance, server)
     return render_template('dispatch.html',
                            join_url=server.get_url() + JOIN_TABLE_API_ENDPOINT,
                            token=token)
