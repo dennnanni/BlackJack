@@ -36,6 +36,7 @@ class GameServer(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     host = Column(String, nullable=False)
     port = Column(Integer, nullable=False)
+    capacity = Column(Integer, nullable=False)
 
     users = relationship("User", secondary=userservers, back_populates="servers")
 
@@ -72,10 +73,10 @@ def get_servers_with_user_count():
         ).group_by(GameServer).all()
 
 
-def register_server(host, port):
+def register_server(host, port, capacity):
     """Insert a new game server; returns its assigned id."""
     with SessionLocal() as session:
-        server = GameServer(host=host, port=port)
+        server = GameServer(host=host, port=port, capacity=capacity)
         session.add(server)
         session.commit()
         return server.id
