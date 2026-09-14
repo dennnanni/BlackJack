@@ -6,19 +6,11 @@ from sqlalchemy import (Column, Float, ForeignKey, Integer, Numeric, String, Tab
                         create_engine, func, literal)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
-from central_server.config import DATABASE_URL, HEARTBEAT
+from central_server.config import DATABASE_URL, HEARTBEAT, SEAT_GRACE, SEAT_TAKEOVER
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
-
-# many-to-many relationship between users and game servers
-userservers = Table(
-    'userserver', Base.metadata,
-    Column('username', String, ForeignKey('user.username', ondelete='CASCADE'), primary_key=True),
-    Column('idserver', Integer, ForeignKey('gameserver.id', ondelete='CASCADE'), primary_key=True)
-)
-
 
 class User(Base):
     __tablename__ = 'user'
@@ -27,8 +19,6 @@ class User(Base):
     password = Column(String, nullable=False)
     salt = Column(String, nullable=False)
     balance = Column(Numeric(10, 2), default=0.0)
-
-    servers = relationship("GameServer", secondary=userservers, back_populates="users")
 
 
 class GameServer(Base):
@@ -41,7 +31,12 @@ class GameServer(Base):
     load = Column(Integer, nullable=False, default=0)
     last_seen = Column(Float, nullable=False, default=0.0)
 
-    users = relationship("User", secondary=userservers, back_populates="servers")
+class Seat(Base):
+    __tablename__ = 'seat'
+
+    username = Column(String, primary_key=True)
+    server_id = Column(Integer, nullable=False)
+    since = Column(Float, nullable=False)
 
 
 def init_db():
@@ -69,6 +64,7 @@ def register_server(host, port, capacity):
 
 
 def update_heartbeat(server_id, players):
+    """Record a heartbeat and update seated players"""
     with SessionLocal() as session:
         server = session.get(GameServer, server_id)
         if server is None:
@@ -76,8 +72,13 @@ def update_heartbeat(server_id, players):
 
         server.load = len(players)
         server.last_seen = time.time()
-        session.commit()
+        session.query(Seat).filter(
+            Seat.server_id == server_id,
+            Seat.since < time.time() - SEAT_GRACE,
+            Seat.username.notin_(players)
+        ).delete()
 
+        session.commit()
         return True
 
 
@@ -87,6 +88,27 @@ def get_alive_servers():
             GameServer.last_seen >= time.time() - HEARTBEAT,
             GameServer.load < GameServer.capacity
         ).all()
+
+def take_seat(username, server_id):
+    """Add new player seat if player not seated or update the existing one if
+    game server not available and takeover expired."""
+    with SessionLocal() as session:
+        seat = session.get(Seat, username)
+        if seat is not None:
+            owner = session.get(GameServer, seat.server_id)
+            owner_alive = owner is not None and owner.last_seen >= time.time() - SEAT_TAKEOVER
+            if seat.server_id != server_id and owner_alive:
+                return False
+            seat.server_id = server_id
+            seat.since = time.time()
+            session.commit()
+            return True
+        session.add(Seat(username=username, server_id=server_id, since=time.time()))
+        try:
+            session.commit()
+        except:
+            return False
+        return True
 
 
 def update_users_balance(results):

@@ -20,4 +20,9 @@ JOIN_TOKEN_TTL = 120
 
 HEARTBEAT = 15
 
+# standby time for reassignment since last heartbeat update
+SEAT_TAKEOVER = 30
+# validity time without heartbeats for newly assigned seats
+SEAT_GRACE = 30
+
 INITIAL_BALANCE = 1000

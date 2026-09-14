@@ -129,6 +129,10 @@ def play():
         return _render_home(user, error='No game server is available right now, try again later')
 
     chosen_server = min(available_servers, key=lambda s: s.load)
+    if not db.take_seat(user.username, chosen_server.server_id):
+        return _render_home(user, error="You are already seated at a table: leave it "
+                                        "(or wait a few seconds) before playing again")
+
     token = auth.create_join_token(user.username, user.balance, chosen_server)
     join_url = f'http://{chosen_server.host}:{chosen_server.port}/join'
     return render_template('dispatch.html', join_url=join_url, token=token)
