@@ -3,7 +3,7 @@ from decimal import Decimal
 import time
 
 from sqlalchemy import (Column, Float, ForeignKey, Integer, Numeric, String, Table,
-                        create_engine, func, literal)
+                        create_engine, func, literal, update)
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from central_server.config import DATABASE_URL, HEARTBEAT, SEAT_GRACE, SEAT_TAKEOVER
@@ -123,8 +123,9 @@ def apply_round(round_id, results):
         if session.get(AppliedRound, round_id) is not None:
             return
         for result in results:
-            user = session.get(User, result.username)
-            if user:
-                user.balance += Decimal(str(result.balance_difference))
+            session.execute(
+                update(User)
+                .where(User.username == result.username)
+                .values(balance=User.balance + Decimal(str(result.balance_difference))))
         session.add(AppliedRound(round_id=round_id, applied_at=time.time()))
         session.commit()
