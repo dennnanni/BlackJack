@@ -129,3 +129,10 @@ def apply_round(round_id, results):
                 .values(balance=User.balance + Decimal(str(result.balance_difference))))
         session.add(AppliedRound(round_id=round_id, applied_at=time.time()))
         session.commit()
+
+def prune_old_rounds(max_age):
+    """Drop applied rounds entries old enough that no retry can still happen"""
+    with SessionLocal() as session:
+        session.query(AppliedRound).filter(
+            AppliedRound.applied_at < time.time() - max_age).delete()
+        session.commit()

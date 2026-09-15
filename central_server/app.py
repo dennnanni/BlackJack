@@ -4,6 +4,7 @@ from flask_login import LoginManager
 from central_server import db
 from central_server.api import api_bp
 from central_server.config import SECRET_KEY
+from central_server.trimmer import start_trimmer
 from central_server.web import UserSession, web_bp
 
 
@@ -18,6 +19,7 @@ def create_app():
 
     login_manager = LoginManager()
     login_manager.init_app(app)
+    start_trimmer()
 
     @login_manager.user_loader
     def load_user(username):

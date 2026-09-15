@@ -25,4 +25,6 @@ SEAT_TAKEOVER = 30
 # validity time without heartbeats for newly assigned seats
 SEAT_GRACE = 30
 
+TRIMMER_INTERVAL = 3600 * 10 # 10 minutes
+
 INITIAL_BALANCE = 1000
