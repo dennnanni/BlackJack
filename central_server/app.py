@@ -21,7 +21,7 @@ def create_app():
 
     @login_manager.user_loader
     def load_user(username):
-        return UserSession(username)
+        return UserSession(username) if db.get_user(username) else None
 
     @login_manager.unauthorized_handler
     def unauthorized():

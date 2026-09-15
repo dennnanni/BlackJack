@@ -99,7 +99,7 @@ def take_seat(username, server_id):
     """Add new player seat if player not seated or update the existing one if
     game server not available and takeover expired."""
     with SessionLocal() as session:
-        seat = session.get(Seat, username)
+        seat = session.get(Seat, username, with_for_update=True)
         if seat is not None:
             owner = session.get(GameServer, seat.server_id)
             owner_alive = owner is not None and owner.last_seen >= time.time() - SEAT_TAKEOVER
