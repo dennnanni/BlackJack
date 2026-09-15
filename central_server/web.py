@@ -129,7 +129,7 @@ def play():
         return _render_home(user, error='No game server is available right now, try again later')
 
     chosen_server = min(available_servers, key=lambda s: s.load)
-    if not db.take_seat(user.username, chosen_server.server_id):
+    if not db.take_seat(user.username, chosen_server.id):
         return _render_home(user, error="You are already seated at a table: leave it "
                                         "(or wait a few seconds) before playing again")
 
