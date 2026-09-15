@@ -9,7 +9,7 @@ from central_server.config import JOIN_TOKEN_TTL, SHARED_SECRET
 from shared.messages import TYP, TYP_JOIN, TYP_SERVER
 
 
-def create_join_token(username, balance, server):
+def create_join_token(username, balance, server_id):
     now = int(time.time())
     # token generation to be used for authentication to the game server
     token = {
@@ -18,7 +18,7 @@ def create_join_token(username, balance, server):
         'typ': TYP_JOIN,
         'iat': now,
         'exp': now + JOIN_TOKEN_TTL,  # add token validity period
-        'server_id': server.id
+        'server_id': server_id
     }
 
     return jwt.encode(token, SHARED_SECRET, algorithm='HS256')

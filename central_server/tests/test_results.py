@@ -75,3 +75,28 @@ def test_results_endpoint_rejects_bad_tokens(session_db, sample_user):
     assert response.status_code == 401
 
     assert _balance(session_db, sample_user) == 1000.0
+
+    # a token signed with the right secret but no typ
+    untyped = jwt.encode({'server_id': 1, 'iat': now, 'exp': now + 60},
+                         'test-secret', algorithm='HS256')
+    response = client.post('/api/servers/results', json=payload,
+                           headers={'Authorization': f'Bearer {untyped}'})
+    assert response.status_code == 401
+
+    assert _balance(session_db, sample_user) == 1000.0
+
+
+def test_players_join_token_cannot_post_results(session_db, sample_user):
+    from central_server import auth
+    from central_server.app import create_app
+    client = create_app().test_client()
+
+    join_token = auth.create_join_token(USERNAME, 1000, server_id=1)
+    response = client.post(
+        '/api/servers/results',
+        json={'round_id': 'stolen', 'results': [{'username': USERNAME,
+                                                 'balance_difference': 1_000_000}]},
+        headers={'Authorization': f'Bearer {join_token}'})
+
+    assert response.status_code == 401
+    assert _balance(session_db, sample_user) == 1000.0
