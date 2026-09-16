@@ -1,3 +1,5 @@
+import time
+
 from flask import session
 from flask_socketio import emit, join_room
 
@@ -15,10 +17,9 @@ sitting_out = set()
 # page does not rewind them to the snapshot their (older) join token carried.
 last_balance = {}
 
-# Players whose socket went away mid-round. They keep their seat until the
-# round they are in is over. They are unseated afterwards if they never came
-# back.
-absent = set()
+# Players who went away mid-round keep their seat until the round they are in is over and are unseated
+# afterwards if they never came back
+absent = {}
 
 
 def seated_players():
@@ -39,7 +40,7 @@ def unseat(username):
         return
     table_manager.remove_user(user)
     last_balance[username] = user.balance
-    absent.discard(username)
+    absent.pop(username, None)
     sitting_out.discard(username)
 
 
@@ -65,7 +66,7 @@ def leave_table(username):
 def reap_absent(table):
     """Called by the loop between rounds: unseat the players of this table
     whose socket never came back."""
-    for username in [u for u in absent if table_manager.get_user_table(u) is table]:
+    for username in [u for u in list(absent) if table_manager.get_user_table(u) is table]:
         unseat(username)
 
 
@@ -109,7 +110,7 @@ def register_event_handlers(socketio):
         username = _session_user()
         if username is None:
             return
-        absent.discard(username)   # they are back (or never really left)
+        absent.pop(username, None)
 
         existing_user = user_map.get(username)
         existing_table = table_manager.get_user_table(username) if existing_user else None
@@ -123,20 +124,19 @@ def register_event_handlers(socketio):
         user_map[username] = user
         table = table_manager.assign_user_to_table(user)
 
-        room_id = _room(table)
-        join_room(room_id)
+        join_room(_room(table))
 
         if table.is_ready_to_start():
             table_id = table.id
             existing_loop = table_game_map.get(table_id)
-            if not existing_loop or not existing_loop.running:    
+            if not existing_loop or not existing_loop.running:
                 game_loop = GameLoop(table)
                 table_game_map[table_id] = game_loop
                 game_loop.start()
-            emit("joined", {"table_id": table.id, "is_player": True}, to=room_id)
+            emit("joined", {"table_id": table.id, "is_player": True})
         else:
-            emit("joined", {"table_id": table.id, "is_player": False}, to=room_id)
-                
+            emit("joined", {"table_id": table.id, "is_player": False})
+
         if table.game:
             emit("initial_cards", {
                 "table": table.id,
@@ -145,7 +145,7 @@ def register_event_handlers(socketio):
                     for u in table.users
                 },
                 'dealer_cards': [str(c) for c in table.game.dealer_hand]
-            }, to=room_id)
+            })
 
     @socketio.on('sit_out')
     def handle_sit_out(data):
@@ -198,6 +198,13 @@ def register_event_handlers(socketio):
             return
         room_id = _room(table)
 
+        # A player who bet stays active through the turns, so place_bet alone
+        # would let them change their stake after seeing their cards.
+        game_loop = table_game_map.get(table.id)
+        if not game_loop or not game_loop.betting_open:
+            emit("error", {"message": "Betting is closed"})
+            return
+
         try:
             all_bet = game.place_bet(user, float(data["amount"]))
         except (KeyError, TypeError, ValueError) as e:
@@ -206,9 +213,7 @@ def register_event_handlers(socketio):
 
         emit("bet_confirmed", {"user": username, "amount": game.bets.get(user)}, to=room_id)
         if all_bet:
-            game_loop = table_game_map.get(table.id)
-            if game_loop:
-                game_loop.bets_done_event.set()
+            game_loop.bets_done_event.set()
             
     @socketio.on('player_action')
     def handle_player_action(data):
@@ -276,6 +281,6 @@ def register_event_handlers(socketio):
             # Mid-round: leave the user in place; the round finishes for them
             # via auto-stand and their result is still reported to central.
             # The loop unseats them after the round unless they reconnect
-            absent.add(username)
+            absent.setdefault(username, time.monotonic())
             return
         unseat(username)

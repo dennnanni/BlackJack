@@ -1,3 +1,4 @@
+import math
 import random
 from itertools import product
 
@@ -31,6 +32,8 @@ class Table:
         return len(self.users) > 0 and self.game is None
 
     def clear_game(self):
+        for user in self.users:
+            user.clear_hand()
         self.users += self.observers
         self.observers = []
         self.game = None
@@ -65,13 +68,17 @@ class Game:
         """Pone una scommessa per l'utente."""
         if user not in self.active_users:
             raise ValueError("User not in active users")
+        if not math.isfinite(bet) or bet <= 0:
+            raise ValueError("Bet must be a positive amount")
         if bet > user.balance:
             raise ValueError("Bet exceeds user's balance")
         self.bets[user] = bet
         return self.all_players_have_bet()
 
     def all_players_have_bet(self):
-        return len(self.bets) == len(self.active_users)
+        # Not a count comparison: a player who bet and then left is still in
+        # bets (the stake is forfeited) but no longer active.
+        return all(user in self.bets for user in self.active_users)
 
     def determine_result(self):
         results: list[Result] = []
@@ -241,7 +248,7 @@ class TableManager:
                 return table
 
         for table in self.tables:
-            if table.is_game_active():
+            if table.table_is_not_full() and table.is_game_active():
                 table.add_observer(user)
                 self.user_table_map[user.username] = table
                 return table

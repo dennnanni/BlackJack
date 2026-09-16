@@ -18,6 +18,11 @@ ROUND_RESULT_DELAY = 7      # show the outcome and final hands before the table 
 LEASE_CHECK_SECONDS = 1    # how often does a freezer table check the lease
 IDLE_ROUND_SECONDS = 3
 
+# A player whose socket dropped is still waited for this long, so that a page
+# reload does not cost them their bet or their turn; after it the table moves on.
+ABSENT_GRACE_SECONDS = 5
+WAIT_POLL_SECONDS = 0.5    # how often a waiting table checks who is still around
+
 class GameLoop(Thread):
     def __init__(self, table):
         super().__init__()
@@ -95,7 +100,8 @@ class GameLoop(Thread):
         self.betting_open = True
         socketio.emit('place_bets', {'table': table_id, 'seconds': BET_WINDOW_SECONDS},
                       to=self.room_id)
-        self.bets_done_event.wait(timeout=BET_WINDOW_SECONDS)
+        self._wait_for_players(self.bets_done_event, BET_WINDOW_SECONDS,
+                               lambda: [u for u in game.active_users if u not in game.bets])
         self.betting_open = False
         for user in self.table.users:
             if not game.bets.get(user):
@@ -173,6 +179,20 @@ class GameLoop(Thread):
         self.table.clear_game()
         reap_absent(self.table)
 
+    def _wait_for_players(self, event, timeout, waiting_on):
+        """The handlers set the event for the common cases; this covers the
+        ones where nobody is left to set it."""
+        from game_server.events import absent
+        deadline = time.monotonic() + timeout
+        while not event.is_set():
+            now = time.monotonic()
+            if now >= deadline:
+                return
+            if all(now - absent.get(u.username, now) > ABSENT_GRACE_SECONDS
+                   for u in waiting_on()):
+                return
+            event.wait(min(WAIT_POLL_SECONDS, deadline - now))
+
     def _run_turn(self, game, user):
         """Give the table to a player until they stand, double down, or
         the time runs out."""
@@ -192,7 +212,8 @@ class GameLoop(Thread):
                       to=self.room_id)
 
         # The entire turn, for as many hits they want to make, sharing this window.
-        self.turn_done_event.wait(TURN_WINDOW_SECONDS)
+        self._wait_for_players(self.turn_done_event, TURN_WINDOW_SECONDS,
+                               lambda: [user] if user in game.active_users else [])
 
         if user in game.active_users:
             game.player_stand(user)
