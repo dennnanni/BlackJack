@@ -27,11 +27,11 @@ def results():
     if payload is None:
         return jsonify({ERROR: 'Missing or invalid server token'}), HTTPStatus.UNAUTHORIZED
 
-    server_id = payload.get(SERVER_ID) if payload else None
+    server_id = payload.get(SERVER_ID)
     data = request.get_json(silent=True) or {}
-    round_id = data[ROUND_ID]
+    round_id = data.get(ROUND_ID)
     if not round_id:
-        jsonify({ERROR: 'round_id is requires'}), HTTPStatus.BAD_REQUEST
+        return jsonify({ERROR: 'round_id is required'}), HTTPStatus.BAD_REQUEST
     try:
         results = [Result.from_dict(r) for r in data[RESULTS]]
     except:
@@ -46,11 +46,11 @@ def leave():
     if payload is None:
         return jsonify({ERROR: 'Missing or invalid server token'}), HTTPStatus.UNAUTHORIZED
 
-    server_id = payload.get(SERVER_ID) if payload else None
+    server_id = payload.get(SERVER_ID)
     data = request.get_json(silent=True) or {}
     buy_ins = data.get(BUY_INS)
     if not isinstance(buy_ins, list):
-        return jsonify({ERROR: 'players is required'}), HTTPStatus.BAD_REQUEST
+        return jsonify({ERROR: 'buy_ins is required'}), HTTPStatus.BAD_REQUEST
 
     db.close_buy_in(server_id, buy_ins)
     return jsonify({SUCCESS: True}), HTTPStatus.OK

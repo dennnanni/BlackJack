@@ -136,14 +136,16 @@ def play():
 
     chosen_server = min(available_servers, key=lambda s: s.load)
     try:
-        buy_in_id = db.create_buy_in(user.username, chosen_server.id, buy_in)
-    except:
-        return _render_home(user, error='Your buy in cannot exceed your balance')
+        buy_in_id, reserved = db.create_buy_in(user.username, chosen_server.id, buy_in)
+    except ValueError as e:
+        return _render_home(user, error=str(e))
 
     if not db.take_seat(user.username, chosen_server.id):
+        # give the money back to the user if it cannot take a seat
+        db.close_buy_in(chosen_server.id, [buy_in_id])
         return _render_home(user, error="You are already seated at a table: leave it "
                                         "(or wait a few seconds) before playing again")
 
-    token = auth.create_join_token(user.username, chosen_server.id, buy_in_id, buy_in)
+    token = auth.create_join_token(user.username, chosen_server.id, buy_in_id, reserved)
     join_url = f'http://{chosen_server.host}:{chosen_server.port}/join'
     return render_template('dispatch.html', join_url=join_url, token=token)

@@ -1,10 +1,11 @@
 """Database layer of the central server."""
-from decimal import Decimal
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
 import time
 import uuid
 
-from sqlalchemy import (Column, Float, ForeignKey, Integer, Numeric, String, Table,
-                        create_engine, func, literal, update)
+from sqlalchemy import (Column, Float, ForeignKey, Index, Integer, Numeric, String,
+                        Table, create_engine, func, literal, or_, update)
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from central_server.config import DATABASE_URL, HEARTBEAT, SEAT_GRACE, SEAT_TAKEOVER
@@ -44,12 +45,18 @@ class BuyIn(Base):
     __tablename__ = 'buyin'
 
     id = Column(String, primary_key=True)
-    username = Column(String, ForeignKey('user.username'))
-    server_id = Column(Integer)
+    username = Column(String, nullable=False)
+    server_id = Column(Integer, nullable=False)
     initial = Column(Numeric(10, 2), nullable=False)
     remaining = Column(Numeric(10, 2), nullable=False)
     last_updated = Column(Float, nullable=False)
     closed_at = Column(Float)
+
+    __table_args__ = (
+        Index('idx_open_buy_in', 'username', 'server_id', unique=True,
+              postgresql_where=closed_at.is_(None),
+              sqlite_where=closed_at.is_(None)),
+    )
 
 # keeps the list of rounds that have already been applied to avoid duplicates
 class AppliedRound(Base):
@@ -122,6 +129,7 @@ def take_seat(username, server_id):
             seat.since = time.time()
             session.commit()
             return True
+        
         session.add(Seat(username=username, server_id=server_id, since=time.time()))
         try:
             session.commit()
@@ -130,38 +138,82 @@ def take_seat(username, server_id):
         return True
 
 def create_buy_in(username, server_id, buy_in):
+    """Creates the buy in row reserving an amount from the user balance"""
     with SessionLocal() as session:
         user = session.get(User, username)
-        if buy_in > user.balance:
-            raise ValueError('User buy in amount cannot exceed user balance')
-        if buy_in <= 0:
-            raise ValueError('Buy in amount cannot be negative or zero')
+        if user is None:
+            raise ValueError('Unknown user')
+
+        try:
+            amount = Decimal(str(buy_in))
+        except:
+            raise ValueError('Buy in amount is not a valid number')
         
-        amount = Decimal(str(buy_in))
+        if amount <= 0:
+            raise ValueError('Buy in amount cannot be negative or zero')
+        if amount > user.balance:
+            raise ValueError('User buy in amount cannot exceed user balance')
+
         id = str(uuid.uuid4())
         user.balance -= amount # reserves the buy in from the balance
-        buy_in = BuyIn(id=id, username=username, server_id=server_id, initial=amount, remaining=amount, 
-                       last_updated=time.time())
-        session.add(buy_in)
-        session.commit()
-        return id
+        session.add(BuyIn(id=id, username=username, server_id=server_id,
+                          initial=amount, remaining=amount,
+                          last_updated=time.time()))
+        try:
+            session.commit()
+        except:
+            # if it ends up here the unique index has raised
+            session.rollback()
+            raise ValueError('You already have an open buy in on that table')
+        return id, amount
+
+
+def _settle(session, buy_in):
+    """Hand what is left of a buy in back to its player."""
+    session.execute(
+        update(User)
+        .where(User.username == buy_in.username)
+        .values(balance=User.balance + buy_in.remaining))
+    now = time.time()
+    buy_in.remaining = 0
+    buy_in.closed_at = now
+    buy_in.last_updated = now
+
 
 def close_buy_in(server_id, buy_in_ids):
-    """Delete the buy in entries re-enstating the money in user balance"""
+    """Closes the buy ins of the given ids"""
+    closed = []
     with SessionLocal() as session:
         for id in buy_in_ids:
-            buy_in = session.get(BuyIn, id)
+            buy_in = session.get(BuyIn, id, with_for_update=True)
             if buy_in and buy_in.server_id == server_id and buy_in.closed_at is None:
-                session.execute(
-                    update(User)
-                    .where(User.username == buy_in.username)
-                    .values(balance=User.balance + buy_in.remaining))
-                buy_in.remaining = 0
-                now = time.time()
-                buy_in.closed_at = now
-                buy_in.last_updated = now
+                _settle(session, buy_in)
+                closed.append(id)
         session.commit()
-        
+    return closed
+
+
+def close_abandoned_buy_ins(grace):
+    """Settle open buy ins that no game server is holding any more"""
+    with SessionLocal() as session:
+        seat_held = session.query(Seat).filter(
+            Seat.username == BuyIn.username,
+            Seat.server_id == BuyIn.server_id).exists()
+        server_alive = session.query(GameServer).filter(
+            GameServer.id == BuyIn.server_id,
+            GameServer.last_seen >= time.time() - SEAT_TAKEOVER).exists()
+        abandoned = session.query(BuyIn).filter(
+            BuyIn.closed_at.is_(None),
+            BuyIn.last_updated < time.time() - grace,
+            or_(~seat_held, ~server_alive)).with_for_update().all()
+
+        closed = [buy_in.id for buy_in in abandoned]
+        for buy_in in abandoned:
+            _settle(session, buy_in)
+        session.commit()
+    return closed
+
+
 
 def apply_round(round_id, server_id, results):
     """Apply each result's balance change to its player exactly once."""
