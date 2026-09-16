@@ -99,6 +99,7 @@ def register_event_handlers(socketio):
                 u.username: [str(c) for c in u.hand] for u in table.users
             }
             payload['betting_open'] = bool(game_loop and game_loop.betting_open)
+            payload['bet_seconds_left'] = game_loop.bet_seconds_left() if game_loop else 0
             payload['your_turn'] = bool(game_loop and game_loop.current_player is user)
             payload['bet_amount'] = game.bets.get(user)
         emit('resumed', payload)

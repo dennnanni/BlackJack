@@ -19,6 +19,12 @@
         button:disabled { opacity: .5; cursor: not-allowed; }
         #actions { display: none; }
         #bet-controls { display: none; }
+        #bet-timer { font-weight: bold; margin-right: 6px; }
+        #bet-timer.urgent { color: #ff8080; }
+        .total { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 10px;
+                 background: rgba(255,255,255,.15); font-size: .9em; font-weight: bold; }
+        .total:empty { display: none; }
+        .total.bust { background: #a11; }
         #log { font-size: .9em; max-height: 180px; overflow-y: auto; opacity: .85; }
         #log div { border-bottom: 1px solid rgba(255,255,255,.1); padding: 2px 0; }
         .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
@@ -70,7 +76,7 @@
 
         <div class="zone dealer">
             <h3>Dealer</h3>
-            <div id="dealer-cards">—</div>
+            <div><span id="dealer-cards">—</span><span id="dealer-total" class="total"></span></div>
         </div>
 
         <div class="zone">
@@ -82,6 +88,7 @@
             <span id="bet-controls">
                 <input id="bet-amount" placeholder="Your bet" type="number" min="1">
                 <button id="bet-button" onclick="sendBet()">Place bet</button>
+                <span id="bet-timer"></span>
             </span>
             <span id="actions">
                 <button onclick="sendAction('hit')">Hit</button>
@@ -104,6 +111,7 @@
         let myBet = 0;
         let sittingOut = false;
         let countdownTimer = null;
+        let betTimer = null;
         const socket = io();
 
         const $ = id => document.getElementById(id);
@@ -122,6 +130,7 @@
         function showBetControls(show) {
             $("bet-controls").style.display = show ? "inline" : "none";
             if (show) $("bet-button").disabled = false;
+            else stopBetTimer();   // the timer only means something next to the controls
         }
         function showActions(show) {
             $("actions").style.display = show ? "inline" : "none";
@@ -181,15 +190,8 @@
                 return;
             }
 
-            $("dealer-cards").innerHTML = renderCards(data.dealer_cards);
-            $("players-area").innerHTML = "";
-            for (const user in data.hands) {
-                const div = document.createElement("div");
-                div.className = "player" + (user === me ? " me" : "");
-                div.innerHTML = `<strong>${user}</strong>: <span class="hand">${renderCards(data.hands[user])}</span>`;
-                div.id = `hand-${user}`;
-                $("players-area").appendChild(div);
-            }
+            setDealerCards(data.dealer_cards);
+            renderPlayers(data.hands);
 
             if (data.your_turn) {
                 highlightTurn(me);
@@ -200,6 +202,7 @@
             } else if (data.betting_open && data.bet_amount == null && !sittingOut) {
                 showActions(false);
                 showBetControls(true);
+                startBetTimer(data.bet_seconds_left);
                 setStatus("Place your bet to join this round — or sit it out and stake nothing.");
             } else {
                 showActions(false);
@@ -212,12 +215,12 @@
         socket.on("game_starting", () => {
             clearCountdown();
             setStatus("Round starting…");
-            $("dealer-cards").innerHTML = "—";
+            setDealerCards([]);
             $("players-area").innerHTML = "—";
             myBet = 0;
         });
 
-        socket.on("place_bets", () => {
+        socket.on("place_bets", data => {
             showActions(false);
             if (sittingOut) {
                 setStatus("You are sitting out. Press “Sit in” to play the next round.");
@@ -226,6 +229,7 @@
             }
             setStatus("Place your bet to join this round — or sit it out and stake nothing.");
             showBetControls(true);
+            startBetTimer(data.seconds);
         });
 
         socket.on("seat_state", data => {
@@ -279,15 +283,8 @@
         });
 
         socket.on("initial_cards", data => {
-            $("players-area").innerHTML = "";
-            for (const user in data.hands) {
-                const div = document.createElement("div");
-                div.className = "player" + (user === me ? " me" : "");
-                div.innerHTML = `<strong>${user}</strong>: <span class="hand">${renderCards(data.hands[user])}</span>`;
-                div.id = `hand-${user}`;
-                $("players-area").appendChild(div);
-            }
-            if (data.dealer_cards) $("dealer-cards").innerHTML = renderCards(data.dealer_cards);
+            renderPlayers(data.hands);
+            if (data.dealer_cards) setDealerCards(data.dealer_cards);
             // Action buttons are governed by turn_started, not by the deal.
         });
 
@@ -337,18 +334,18 @@
         socket.on("dealer_turn", () => {
             clearTurnHighlight();
             // Not cleared: the upcard has been on the table since the deal, and
-            // dealer_card appends the rest to it.
+            // each dealer_card redraws the whole hand with the new card in it.
             setStatus("Dealer's turn — drawing…");
         });
 
         socket.on("dealer_card", data => {
             log(`Dealer drew ${data.card}`);
-            $("dealer-cards").innerHTML += cardSpan(data.card);
+            setDealerCards(data.cards);
         });
 
         socket.on("dealer_done", data => {
             clearTurnHighlight();
-            $("dealer-cards").innerHTML = renderCards(data.cards);
+            setDealerCards(data.cards);
             setStatus("Dealer stands. Settling the round…");
         });
 
@@ -379,7 +376,46 @@
         function appendCard(user, card) {
             const hand = $(`hand-${user}`);
             const span = hand && hand.querySelector(".hand");
-            if (span) span.innerHTML += cardSpan(card);
+            if (!span) return;
+            span.innerHTML += cardSpan(card);
+            showTotal(span, hand.querySelector(".total"));
+        }
+        function renderPlayers(hands) {
+            $("players-area").innerHTML = "";
+            for (const user in hands) {
+                const div = document.createElement("div");
+                div.className = "player" + (user === me ? " me" : "");
+                div.innerHTML = `<strong>${user}</strong>: <span class="hand">${renderCards(hands[user])}</span><span class="total"></span>`;
+                div.id = `hand-${user}`;
+                $("players-area").appendChild(div);
+                showTotal(div.querySelector(".hand"), div.querySelector(".total"));
+            }
+        }
+        function setDealerCards(cards) {
+            $("dealer-cards").innerHTML = renderCards(cards);
+            showTotal($("dealer-cards"), $("dealer-total"));
+        }
+        // Mirrors Hand.get_hand_value on the server: aces count 11, then drop
+        // to 1 one at a time while the hand busts. A hand still counting an
+        // ace as 11 is "soft", since a hit cannot bust it.
+        function handValue(cards) {
+            let total = 0, aces = 0;
+            for (const card of cards) {
+                const rank = card.slice(0, -1);   // "10♠" -> "10"
+                if (rank === "A") { total += 11; aces += 1; }
+                else total += ["J", "Q", "K"].includes(rank) ? 10 : Number(rank);
+            }
+            while (total > 21 && aces) { total -= 10; aces -= 1; }
+            return { total, soft: aces > 0 };
+        }
+        function showTotal(cardsEl, totalEl) {
+            const cards = [...cardsEl.querySelectorAll(".card")].map(el => el.textContent);
+            const { total, soft } = handValue(cards);
+            totalEl.classList.toggle("bust", total > 21);
+            totalEl.innerText = !cards.length ? ""
+                              : total > 21 ? `${total} bust`
+                              : total === 21 && cards.length === 2 ? "Blackjack"
+                              : soft ? `soft ${total}` : `${total}`;
         }
         function highlightTurn(user) {
             clearTurnHighlight();
@@ -391,6 +427,33 @@
         }
         function clearCountdown() {
             if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        }
+        // Counts down to a local deadline rather than decrementing a counter,
+        // so a background tab whose intervals get throttled still shows the
+        // right time.
+        function startBetTimer(seconds) {
+            stopBetTimer();
+            if (!(seconds > 0)) return;
+            const deadline = Date.now() + seconds * 1000;
+            const render = () => {
+                const left = Math.ceil((deadline - Date.now()) / 1000);
+                if (left <= 0) {
+                    // The server closed the window before our deadline (the
+                    // message took time to get here): a bet now is refused.
+                    showBetControls(false);
+                    setStatus("Betting closed: you are watching this round.");
+                    return;
+                }
+                $("bet-timer").innerText = `${left}s left to bet`;
+                $("bet-timer").classList.toggle("urgent", left <= 5);
+            };
+            render();
+            betTimer = setInterval(render, 250);
+        }
+        function stopBetTimer() {
+            if (betTimer) { clearInterval(betTimer); betTimer = null; }
+            $("bet-timer").innerText = "";
+            $("bet-timer").classList.remove("urgent");
         }
         function startCountdown(seconds, base) {
             clearCountdown();
