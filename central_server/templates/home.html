@@ -31,6 +31,25 @@
                     <h4 class="mb-4">Balance: ${{ balance }}</h4>
 
                     <form method="POST" action="/play">
+                        <label for="buy_in" class="form-label">Buy in</label>
+                        <div class="input-group input-group-lg mb-2">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control" id="buy_in" name="buy_in"
+                                   step="0.01" min="0.01" max="{{ balance }}" value="{{ balance }}"
+                                   required>
+                        </div>
+
+                        <div class="btn-group w-100 mb-3" role="group" aria-label="Quick buy in amounts">
+                            <button type="button" class="btn btn-outline-light btn-sm" data-fraction="0.25">25%</button>
+                            <button type="button" class="btn btn-outline-light btn-sm" data-fraction="0.5">50%</button>
+                            <button type="button" class="btn btn-outline-light btn-sm" data-fraction="1">Max</button>
+                        </div>
+
+                        <p class="small text-white-50">
+                            This much leaves your balance while you are at the table, and comes
+                            back with whatever is left of it when you get up.
+                        </p>
+
                         <button type="submit" class="btn btn-success btn-lg w-100">Play</button>
                     </form>
                 </div>
@@ -39,6 +58,18 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        (function () {
+            const field = document.getElementById('buy_in');
+            const balance = parseFloat(field.max);
+            document.querySelectorAll('[data-fraction]').forEach(function (button) {
+                button.addEventListener('click', function () {
+                    const amount = Math.floor(balance * parseFloat(button.dataset.fraction) * 100) / 100;
+                    field.value = amount.toFixed(2);
+                });
+            });
+        })();
+    </script>
 </body>
 
 </html>

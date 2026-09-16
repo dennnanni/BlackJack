@@ -12,6 +12,7 @@ PORT = 'port'
 CAPACITY = 'capacity'
 PLAYERS = 'players'
 ROUND_ID = 'round_id'
+BUY_INS = 'buy_ins'
 RESULTS = 'results'
 # Token class to distinguish between a server join token and a user token
 TYP = 'typ'

@@ -124,15 +124,26 @@ def play():
     if user.balance <= 0:
         return _render_home(user, error='Your balance is zero: add funds to play')
 
+    # type=float gives None instead of raising when the field is missing or is
+    # not a number, so a hand-rolled POST cannot 500 the route.
+    buy_in = request.form.get('buy_in', type=float)
+    if buy_in is None:
+        return _render_home(user, error='Enter how much you want to bring to the table')
+
     available_servers = db.get_alive_servers()
     if not available_servers:
         return _render_home(user, error='No game server is available right now, try again later')
 
     chosen_server = min(available_servers, key=lambda s: s.load)
+    try:
+        buy_in_id = db.create_buy_in(user.username, chosen_server.id, buy_in)
+    except:
+        return _render_home(user, error='Your buy in cannot exceed your balance')
+
     if not db.take_seat(user.username, chosen_server.id):
         return _render_home(user, error="You are already seated at a table: leave it "
                                         "(or wait a few seconds) before playing again")
 
-    token = auth.create_join_token(user.username, user.balance, chosen_server.id)
+    token = auth.create_join_token(user.username, chosen_server.id, buy_in_id, buy_in)
     join_url = f'http://{chosen_server.host}:{chosen_server.port}/join'
     return render_template('dispatch.html', join_url=join_url, token=token)

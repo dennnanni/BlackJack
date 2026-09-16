@@ -9,12 +9,13 @@ from central_server.config import JOIN_TOKEN_TTL, SHARED_SECRET
 from shared.messages import TYP, TYP_JOIN, TYP_SERVER
 
 
-def create_join_token(username, balance, server_id):
+def create_join_token(username, server_id, buy_in_id, buy_in):
     now = int(time.time())
     # token generation to be used for authentication to the game server
     token = {
         'sub': username,
-        'balance': float(balance),
+        'buy_in_id': buy_in_id,
+        'buy_in': float(buy_in),
         'typ': TYP_JOIN,
         'iat': now,
         'exp': now + JOIN_TOKEN_TTL,  # add token validity period

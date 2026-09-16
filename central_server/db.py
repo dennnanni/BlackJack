@@ -1,6 +1,7 @@
 """Database layer of the central server."""
 from decimal import Decimal
 import time
+import uuid
 
 from sqlalchemy import (Column, Float, ForeignKey, Integer, Numeric, String, Table,
                         create_engine, func, literal, update)
@@ -37,6 +38,18 @@ class Seat(Base):
     username = Column(String, primary_key=True)
     server_id = Column(Integer, nullable=False)
     since = Column(Float, nullable=False)
+
+
+class BuyIn(Base):
+    __tablename__ = 'buyin'
+
+    id = Column(String, primary_key=True)
+    username = Column(String, ForeignKey('user.username'))
+    server_id = Column(Integer)
+    initial = Column(Numeric(10, 2), nullable=False)
+    remaining = Column(Numeric(10, 2), nullable=False)
+    last_updated = Column(Float, nullable=False)
+    closed_at = Column(Float)
 
 # keeps the list of rounds that have already been applied to avoid duplicates
 class AppliedRound(Base):
@@ -116,18 +129,61 @@ def take_seat(username, server_id):
             return False
         return True
 
+def create_buy_in(username, server_id, buy_in):
+    with SessionLocal() as session:
+        user = session.get(User, username)
+        if buy_in > user.balance:
+            raise ValueError('User buy in amount cannot exceed user balance')
+        if buy_in <= 0:
+            raise ValueError('Buy in amount cannot be negative or zero')
+        
+        amount = Decimal(str(buy_in))
+        id = str(uuid.uuid4())
+        user.balance -= amount # reserves the buy in from the balance
+        buy_in = BuyIn(id=id, username=username, server_id=server_id, initial=amount, remaining=amount, 
+                       last_updated=time.time())
+        session.add(buy_in)
+        session.commit()
+        return id
 
-def apply_round(round_id, results):
+def close_buy_in(server_id, buy_in_ids):
+    """Delete the buy in entries re-enstating the money in user balance"""
+    with SessionLocal() as session:
+        for id in buy_in_ids:
+            buy_in = session.get(BuyIn, id)
+            if buy_in and buy_in.server_id == server_id and buy_in.closed_at is None:
+                session.execute(
+                    update(User)
+                    .where(User.username == buy_in.username)
+                    .values(balance=User.balance + buy_in.remaining))
+                buy_in.remaining = 0
+                now = time.time()
+                buy_in.closed_at = now
+                buy_in.last_updated = now
+        session.commit()
+        
+
+def apply_round(round_id, server_id, results):
     """Apply each result's balance change to its player exactly once."""
     with SessionLocal() as session:
         if session.get(AppliedRound, round_id) is not None:
             return
+        now = time.time()
         for result in results:
-            session.execute(
-                update(User)
-                .where(User.username == result.username)
-                .values(balance=User.balance + Decimal(str(result.balance_difference))))
-        session.add(AppliedRound(round_id=round_id, applied_at=time.time()))
+            difference = Decimal(str(result.balance_difference))
+            charged = session.execute(
+                update(BuyIn)
+                .where(BuyIn.username == result.username)
+                .where(BuyIn.server_id == server_id)
+                .where(BuyIn.closed_at.is_(None))
+                .values(remaining=BuyIn.remaining + difference,
+                        last_updated=now))
+            if charged.rowcount == 0:
+                session.execute(
+                    update(User)
+                    .where(User.username == result.username)
+                    .values(balance=User.balance + difference))
+        session.add(AppliedRound(round_id=round_id, applied_at=now))
         session.commit()
 
 def prune_old_rounds(max_age):
