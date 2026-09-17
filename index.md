@@ -4,19 +4,20 @@
 - [Juri Guglielmi](mailto:juri.guglielmi@studio.unibo.it)
 - [Denise Nanni](mailto:denise.nanni@studio.unibo.it)
 
-### AI Disclaimer (if needed)
+### AI Disclaimer
 
 ```
-"During the preparation of this work, the author(s) used [NAME TOOL /
-SERVICE] to [REASON].
-After using this tool/service, the author(s) reviewed and edited the
-content as needed and take(s) full responsibility for the content of the
-final report/artifact."
+During the preparation of this work, the authors used Claude and Claude Code to massively refactor the repository after the long break in the development of the project, and to simplify and clean the code.
+After using this tool/service, the authors reviewed and edited the
+content as needed and take full responsibility for the content of the
+final report and artifact.
 ```
 
 ## Abstract
 
-Brief description of the project, its goals, and its achievements.
+The project implements a distributed BlackJack: a central server allows player to register, login and find a table to play, while game servers handle the game logic.
+The project's goal is to provide a distributed platform that handles multiple players in tables, enforcing timed staking and actions, and keeps the players' money safe across rounds.
+The central server enforces the correctness of players' balances, the game servers can be scaled out to support increasing players load.
 
 ## Concept
 
