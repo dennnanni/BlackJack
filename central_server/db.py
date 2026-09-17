@@ -2,6 +2,7 @@
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
 import time
 import uuid
+import logging
 
 from sqlalchemy import (Column, Float, ForeignKey, Index, Integer, Numeric, String,
                         Table, create_engine, func, literal, or_, update)
@@ -13,6 +14,8 @@ from central_server.config import DATABASE_URL, HEARTBEAT, SEAT_GRACE, SEAT_TAKE
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
+
+logger = logging.getLogger(__name__)
 
 class User(Base):
     __tablename__ = 'user'
@@ -170,12 +173,15 @@ def create_buy_in(username, server_id, buy_in):
 
 def _settle(session, buy_in):
     """Hand what is left of a buy in back to its player."""
+    remaining = buy_in.remaining
+    if remaining < 0:
+        logger.error('Buy in remaining amount is negative, capping it to zero')
+        remaining = 0
     session.execute(
         update(User)
         .where(User.username == buy_in.username)
-        .values(balance=User.balance + buy_in.remaining))
+        .values(balance=User.balance + remaining))
     now = time.time()
-    buy_in.remaining = 0
     buy_in.closed_at = now
     buy_in.last_updated = now
 
@@ -213,7 +219,12 @@ def close_abandoned_buy_ins(grace):
         session.commit()
     return closed
 
-
+def _get_buy_in(session, result):
+    buy_in = session.get(BuyIn, result.buy_in_id, with_for_updates=True)
+    if buy_in is None or buy_in.server_id != result.server_id or buy_in.username != result.username:
+        return None
+    return buy_in
+        
 
 def apply_round(round_id, server_id, results):
     """Apply each result's balance change to its player exactly once."""
@@ -222,19 +233,30 @@ def apply_round(round_id, server_id, results):
             return
         now = time.time()
         for result in results:
+            buy_in = _get_buy_in(session, result)
+            if buy_in is None:
+                logger.error(f'Server {server_id} reported a result for {result.username} with no buy in in that server')
+                continue
+
             difference = Decimal(str(result.balance_difference))
-            charged = session.execute(
-                update(BuyIn)
-                .where(BuyIn.username == result.username)
-                .where(BuyIn.server_id == server_id)
-                .where(BuyIn.closed_at.is_(None))
-                .values(remaining=BuyIn.remaining + difference,
-                        last_updated=now))
-            if charged.rowcount == 0:
+            # cap the win if something went wrong and the table let the player stake more than available
+            if difference > buy_in.remaining:
+                logger.error(f'Server {server_id} reported a win of {difference} for '
+                            f'{result.username} on a buy in holding {buy_in.remaining}')
+                difference = buy_in.remaining
+            # cap to the max loss of the table
+            charge = max(difference, -buy_in.remaining)
+
+            # applies the difference directly on the user balance
+            if buy_in.closed_at is not None:
                 session.execute(
                     update(User)
                     .where(User.username == result.username)
-                    .values(balance=User.balance + difference))
+                    .values(balance=User.balance + charge))
+
+            buy_in.remaining = buy_in.remaining + charge
+            buy_in.last_updated = now
+
         session.add(AppliedRound(round_id=round_id, applied_at=now))
         session.commit()
 
