@@ -14,6 +14,9 @@ class Outbox:
                          'round_id TEXT PRIMARY KEY,'
                          'payload TEXT NOT NULL,'
                          'created_at REAL NOT NULL)')
+            conn.execute('CREATE TABLE IF NOT EXISTS pending_leave ('
+                         'buy_in_id TEXT PRIMARY KEY,'
+                         'created_at REAL NOT NULL)')
 
     @contextmanager
     def _connection(self):
@@ -42,3 +45,22 @@ class Outbox:
         """Delivery confirmed by central: the entry is no longer needed."""
         with self._connection() as conn:
             conn.execute('DELETE FROM pending WHERE round_id = ?', (round_id,))
+
+    def enqueue_leave(self, buy_in_id):
+        """A player left the table: central must close their buy-in."""
+        with self._connection() as conn:
+            conn.execute('INSERT OR IGNORE INTO pending_leave VALUES (?, ?)',
+                         (buy_in_id, time.time()))
+
+    def pending_leaves(self):
+        """Buy-ins still to close, oldest first."""
+        with self._connection() as conn:
+            rows = conn.execute(
+                'SELECT buy_in_id FROM pending_leave ORDER BY created_at').fetchall()
+        return [buy_in_id for (buy_in_id,) in rows]
+
+    def ack_leaves(self, buy_in_ids):
+        """Central closed these buy-ins: the entries are no longer needed."""
+        with self._connection() as conn:
+            conn.executemany('DELETE FROM pending_leave WHERE buy_in_id = ?',
+                             [(buy_in_id,) for buy_in_id in buy_in_ids])

@@ -175,9 +175,11 @@ class GameLoop(Thread):
     def _end_round(self):
         """End the round and start the next one: observers become players,
         and anyone who hasn't shown up gives up their spot."""
-        from game_server.events import reap_absent  # circolare a import time
+        from game_server.events import close_forfeited_buy_ins, reap_absent  # circolare a import time
+        game = self.table.game
         self.table.clear_game()
         reap_absent(self.table)
+        close_forfeited_buy_ins(game)
 
     def _wait_for_players(self, event, timeout, waiting_on):
         """The handlers set the event for the common cases; this covers the

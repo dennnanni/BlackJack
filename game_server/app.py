@@ -29,14 +29,22 @@ def _heartbeat_loop():
             client.register(SERVER_HOST, SERVER_PORT)
 
 
+def _drain_outbox():
+    """One delivery pass. Results go first, so the rounds a player finished
+    reach central before their buy-in is settled."""
+    for round_id, results in outbox.pending():
+        if not client.send_results(round_id, results):
+            return  # central unreachable: back off, retry from the oldest
+        outbox.ack(round_id)
+    leaves = outbox.pending_leaves()
+    if leaves and client.close_buy_ins(leaves):
+        outbox.ack_leaves(leaves)
+
+
 def _sender_loop():
-    """Drain the outbox towards central: send results of completed rounds, retrying on failure."""
+    """Drain the outbox towards central, retrying on failure."""
     while True:
-        for round_id, results in outbox.pending():
-            if client.send_results(round_id, results):
-                outbox.ack(round_id)
-            else:
-                break  # central unreachable: back off, retry from the oldest
+        _drain_outbox()
         time.sleep(SEND_RETRY_SECONDS)
 
 

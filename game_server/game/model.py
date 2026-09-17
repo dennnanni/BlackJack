@@ -146,10 +146,11 @@ class Game:
             self.active_users.append(user)
 
 class User:
-    def __init__(self, username, balance):
+    def __init__(self, username, balance, buy_in_id=None):
         self.username = username  # Nome dell'utente
         self.balance = balance  # Saldo dell'utente (fiches o denaro)
         self.hand = []  # Mano dell'utente, inizialmente vuota
+        self.buy_in_id = buy_in_id  # the reservation at central that balance plays from
 
     def add_card(self, card):
         self.hand.append(card)

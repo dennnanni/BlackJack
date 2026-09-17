@@ -7,7 +7,7 @@ from flask import (Blueprint, jsonify, redirect, render_template, request,
 
 from game_server.central_client import client
 from game_server.config import CENTRAL_PUBLIC_URL, SHARED_SECRET
-from shared.messages import TYP, TYP_JOIN
+from shared.messages import BUY_IN, BUY_IN_ID, TYP, TYP_JOIN
 
 game_bp = Blueprint('game', __name__)
 
@@ -34,15 +34,10 @@ def verify_join_token(token, expected_server_id):
         raise JoinError('Not a join token', 401)
     if payload.get('server_id') != expected_server_id:
         raise JoinError('Token was minted for a different server', 403)
+    
+    if payload.get(BUY_IN_ID) is None or payload.get(BUY_IN) is None:
+        raise JoinError('Token carries no buy-in', 401)
     return payload
-
-
-def _live_balance(username):
-    from game_server.events import last_balance, user_map
-    user = user_map.get(username)
-    if user:
-        return user.balance
-    return last_balance.get(username, session['balance'])
 
 
 @game_bp.route('/')
@@ -52,8 +47,17 @@ def index():
     username = session.get('username')
     if username is None:
         return render_template('index.html')
+
+    from game_server.events import can_take_seat, user_map   # circular at import time
+    user = user_map.get(username)
+    if user is None and not can_take_seat(session.get('buy_in_id'), session.get('join_exp', 0)):
+        # Not seated and the buy-in cannot seat them any more: it has been
+        # settled, and only central can open a new one.
+        session.clear()
+        return redirect(CENTRAL_PUBLIC_URL)
+    balance = user.balance if user else session['balance']
     return render_template('index.html', username=username,
-                           balance=f"{_live_balance(username):.2f}",
+                           balance=f"{balance:.2f}",
                            central_url=CENTRAL_PUBLIC_URL)
 
 
@@ -71,8 +75,9 @@ def leave():
 
 @game_bp.route('/join', methods=['POST'])
 def join():
-    """Consume a one-shot join token, then redirect to the table page."""
-    
+    """Take in a join token, then redirect to the table page, whose socket
+    takes the seat."""
+
     token = request.form.get('token')
     try:
         if not token:
@@ -81,11 +86,12 @@ def join():
     except JoinError as e:
         return jsonify({'error': str(e)}), e.status
 
-    # Identity and balance come from the signed token, never from the client.
+    # Identity and money come from the signed token, never from the client.
+    # The player brings the buy-in, not their whole balance; join_exp bounds
+    # how long that buy-in may still take a seat.
     session['username'] = payload['sub']
-    session['balance'] = float(payload['balance'])
+    session['buy_in_id'] = payload[BUY_IN_ID]
+    session['balance'] = float(payload[BUY_IN])
+    session['join_exp'] = payload['exp']
     session.permanent = True
-
-    from game_server.events import last_balance
-    last_balance.pop(payload['sub'], None)  # central just told us the truth
     return redirect(url_for('game.index'))
