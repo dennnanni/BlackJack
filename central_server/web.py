@@ -34,16 +34,7 @@ class ServerLoad:
 
     def get_url(self):
         return f'http://{self.host}:{self.port}'
-
-
-def _pick_game_server():
-    """The least loaded registered game server, or None if there is none."""
-    servers = db.get_servers_with_user_count()
-    if not servers:
-        return None
-    return min((ServerLoad(*server) for server in servers),
-               key=lambda server: server.connected_users)
-
+    
 
 def _render_home(user, error=None):
     return render_template('home.html', username=user.username,
@@ -124,9 +115,7 @@ def play():
     if user.balance <= 0:
         return _render_home(user, error='Your balance is zero: add funds to play')
 
-    # type=float gives None instead of raising when the field is missing or is
-    # not a number, so a hand-rolled POST cannot 500 the route.
-    buy_in = request.form.get('buy_in', type=float)
+    buy_in = request.form.get('buy_in', type=int)
     if buy_in is None:
         return _render_home(user, error='Enter how much you want to bring to the table')
 

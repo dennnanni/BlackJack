@@ -35,7 +35,7 @@
                         <div class="input-group input-group-lg mb-2">
                             <span class="input-group-text">$</span>
                             <input type="number" class="form-control" id="buy_in" name="buy_in"
-                                   step="0.01" min="0.01" max="{{ balance }}" value="{{ balance }}"
+                                   step="1" min="1" max="{{ balance }}" value="{{ balance }}"
                                    required>
                         </div>
 
@@ -64,8 +64,8 @@
             const balance = parseFloat(field.max);
             document.querySelectorAll('[data-fraction]').forEach(function (button) {
                 button.addEventListener('click', function () {
-                    const amount = Math.floor(balance * parseFloat(button.dataset.fraction) * 100) / 100;
-                    field.value = amount.toFixed(2);
+                    const amount = Math.floor(balance * parseFloat(button.dataset.fraction));
+                    field.value = String(amount);
                 });
             });
         })();

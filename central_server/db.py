@@ -219,9 +219,9 @@ def close_abandoned_buy_ins(grace):
         session.commit()
     return closed
 
-def _get_buy_in(session, server_id, result):
+def _get_buy_in(session, result):
     buy_in = session.get(BuyIn, result.buy_in_id, with_for_update=True)
-    if buy_in is None or buy_in.server_id != server_id or buy_in.username != result.username:
+    if buy_in is None or buy_in.server_id != result.server_id or buy_in.username != result.username:
         return None
     return buy_in
 
