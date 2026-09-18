@@ -53,8 +53,13 @@ class GameLoop(Thread):
         while self.table.is_ready_to_start():
             self._await_lease()
             if not self.table.is_ready_to_start():
-                break  # se ne sono andati tutti mentre il tavolo era congelato
-            self._play_round()
+                break  
+            try:
+                self._play_round()
+            except Exception as e:
+                socketio.emit('round_error', {'table': self.table.id, 'error': str(e)},
+                              to=self.room_id)
+                self._end_round()
         self.running = False
 
     def _await_lease(self):
