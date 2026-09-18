@@ -13,7 +13,7 @@ DATABASE_URL = os.getenv('DATABASE_URL', 'postgresql://postgres:postgres@localho
 CENTRAL_PORT = int(os.getenv('CENTRAL_PORT', '5002'))
 
 # Flask session-cookie key
-SECRET_KEY = os.getenv('SECRET_KEY', secrets.token_hex(32))
+SECRET_KEY = os.getenv('SECRET_KEY')
 
 # validity period for the join token in seconds
 JOIN_TOKEN_TTL = 120
