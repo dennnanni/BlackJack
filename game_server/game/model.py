@@ -87,7 +87,7 @@ class Game:
                 continue
             diff = self._determine_difference(user)
             user.update_balance(diff)
-            results.append(Result(user.username, diff))
+            results.append(Result(user.username, user.buy_in_id, diff))
         return results
 
     def _determine_difference(self, user):

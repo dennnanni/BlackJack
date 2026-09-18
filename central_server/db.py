@@ -219,12 +219,12 @@ def close_abandoned_buy_ins(grace):
         session.commit()
     return closed
 
-def _get_buy_in(session, result):
-    buy_in = session.get(BuyIn, result.buy_in_id, with_for_updates=True)
-    if buy_in is None or buy_in.server_id != result.server_id or buy_in.username != result.username:
+def _get_buy_in(session, server_id, result):
+    buy_in = session.get(BuyIn, result.buy_in_id, with_for_update=True)
+    if buy_in is None or buy_in.server_id != server_id or buy_in.username != result.username:
         return None
     return buy_in
-        
+
 
 def apply_round(round_id, server_id, results):
     """Apply each result's balance change to its player exactly once."""
@@ -233,7 +233,7 @@ def apply_round(round_id, server_id, results):
             return
         now = time.time()
         for result in results:
-            buy_in = _get_buy_in(session, result)
+            buy_in = _get_buy_in(session, server_id, result)
             if buy_in is None:
                 logger.error(f'Server {server_id} reported a result for {result.username} with no buy in in that server')
                 continue

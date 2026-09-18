@@ -19,8 +19,7 @@ RESULTS = 'results'
 TYP = 'typ'
 TYP_JOIN = 'join'
 TYP_SERVER = 'server'
-# Join token claims: the money a player brings to the table
-BUY_IN_ID = 'buy_in_id'
+# Join token claim: the money a player brings to the table, with BUY_IN_ID
 BUY_IN = 'buy_in'
 USERNAME = 'username'
 BALANCE = 'balance'
