@@ -29,16 +29,17 @@ def _register():
 
 
 def _join_central():
-    """Register with central, retrying a few times since it may not be up yet.
-    If we had an id before a restart, ask central for the same one."""
+    """Register with central (with retry). On restart, flush pending outbox
+    messages under the old ID before reclaiming it."""
     client.server_id = outbox.server_id()
     if client.server_id is not None:
-        print(f'[central] restarting: asking back server id {client.server_id}')
+        print(f'[central] restarting: sending the outbox and asking back server id '
+              f'{client.server_id}')
     for attempt in range(1, REGISTRATION_ATTEMPTS + 1):
-        if _register():
+        if _drain_outbox() and _register():
             print(f'[central] registered as server {client.server_id}')
             return True
-        print(f'[central] registration attempt {attempt}/{REGISTRATION_ATTEMPTS} failed, '
+        print(f'[central] attempt {attempt}/{REGISTRATION_ATTEMPTS} failed, '
               f'retrying in {REGISTRATION_RETRY_SECONDS}s')
         time.sleep(REGISTRATION_RETRY_SECONDS)
     return False
@@ -56,17 +57,17 @@ def _heartbeat_loop():
 
 def _drain_outbox():
     """Results go first, so the rounds a player finished
-    reach central before their buy-in is settled."""
+    reach central before their buy-in is settled. True if everything was sent."""
     for round_id, results in outbox.pending():
         if not client.send_results(round_id, results):
-            return
+            return False
         outbox.ack(round_id)
     leaves = outbox.pending_leaves()
     if not leaves:
-        return
+        return True
     settled = client.close_buy_ins(leaves)
     if settled is None:
-        return
+        return False
     refused = []
     for buy_in_id in leaves:
         if buy_in_id not in settled:
@@ -74,6 +75,7 @@ def _drain_outbox():
     if refused:
         print(f'[central] buy ins {refused} were not settled: they belong to another server')
     outbox.ack_leaves(leaves)
+    return True
 
 
 def _sender_loop():
