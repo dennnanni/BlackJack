@@ -105,6 +105,17 @@ def register_server(host, port, capacity):
         session.commit()
         return server.id
 
+def resurrect_server(server_id, host, port, capacity):
+    with SessionLocal() as session:
+        server = session.get(GameServer, server_id)
+        if server is None:
+            return False
+        server.host = host
+        server.capacity = capacity
+        server.port = port
+        server.last_seen = time.time()
+        return server_id
+
 
 def update_heartbeat(server_id, players):
     """Record a heartbeat and update seated players"""
