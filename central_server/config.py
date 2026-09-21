@@ -1,5 +1,4 @@
 import os
-import secrets
 
 from dotenv import load_dotenv
 
@@ -26,7 +25,7 @@ SEAT_TAKEOVER = 30
 SEAT_GRACE = 30
 
 # how long an open buy in may sit with nobody holding its seat before auto closing
-BUYIN_GRACE = 60
+BUYIN_GRACE = 120
 
 TRIMMER_INTERVAL = 60 * 10 # 10 minutes
 

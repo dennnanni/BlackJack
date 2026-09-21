@@ -7,9 +7,13 @@ APPLIED_ROUND_RETENTION = 7 * 24 * 3600 # a week
 
 
 def _run():
+    i = 0
     while True:
         time.sleep(TRIMMER_INTERVAL)
-        db.prune_old_rounds(APPLIED_ROUND_RETENTION)
+        i += 1
+        if i == 5:
+            db.prune_old_rounds(APPLIED_ROUND_RETENTION)
+            i = 0
         closed = db.close_abandoned_buy_ins(BUYIN_GRACE)
         if closed:
             print(f'[trimmer] closed {len(closed)} buy ins')
