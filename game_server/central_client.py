@@ -21,8 +21,6 @@ class CentralClient:
     def __init__(self, base_url):
         self.base_url = base_url
         self.server_id = None
-        # Time since central last confirmed us. Monotonic on purpose: we never
-        # assume our clock agrees with central's, only that time passes here.
         self._last_contact = time.monotonic()
 
     def lease_valid(self):
@@ -34,8 +32,6 @@ class CentralClient:
 
     def _bearer(self):
         now = int(time.time())
-        # typ marks this as a *server* token: central refuses to accept a join
-        # token here, and a browser never holds one of these.
         claims = {TYP: TYP_SERVER, 'iat': now, 'exp': now + SERVER_TOKEN_TTL}
         if self.server_id is not None:
             claims[SERVER_ID] = self.server_id

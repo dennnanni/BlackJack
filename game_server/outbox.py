@@ -17,6 +17,9 @@ class Outbox:
             conn.execute('CREATE TABLE IF NOT EXISTS pending_leave ('
                          'buy_in_id TEXT PRIMARY KEY,'
                          'created_at REAL NOT NULL)')
+            conn.execute('CREATE TABLE IF NOT EXISTS identity ('
+                         'id INTEGER PRIMARY KEY CHECK (id = 0),'
+                         'server_id INTEGER NOT NULL)')
 
     @contextmanager
     def _connection(self):
@@ -26,6 +29,16 @@ class Outbox:
                 yield conn
         finally:
             conn.close()
+
+    def server_id(self):
+        """Our id at central, None until we first registered."""
+        with self._connection() as conn:
+            row = conn.execute('SELECT server_id FROM identity').fetchone()
+        return row[0] if row else None
+
+    def save_server_id(self, server_id):
+        with self._connection() as conn:
+            conn.execute('INSERT OR REPLACE INTO identity VALUES (0, ?)', (server_id,))
 
     def enqueue(self, round_id, results):
         payload = json.dumps([r.to_dict() for r in results])

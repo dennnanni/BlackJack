@@ -19,6 +19,31 @@ REGISTRATION_RETRY_SECONDS = 2
 SEND_RETRY_SECONDS = 2
 
 
+def _register():
+    """Register with central, which gives us back the id we already hold if
+    it still knows it."""
+    if not client.register(SERVER_HOST, SERVER_PORT):
+        return False
+    outbox.save_server_id(client.server_id)
+    return True
+
+
+def _join_central():
+    """Register with central, retrying a few times since it may not be up yet.
+    If we had an id before a restart, ask central for the same one."""
+    client.server_id = outbox.server_id()
+    if client.server_id is not None:
+        print(f'[central] restarting: asking back server id {client.server_id}')
+    for attempt in range(1, REGISTRATION_ATTEMPTS + 1):
+        if _register():
+            print(f'[central] registered as server {client.server_id}')
+            return True
+        print(f'[central] registration attempt {attempt}/{REGISTRATION_ATTEMPTS} failed, '
+              f'retrying in {REGISTRATION_RETRY_SECONDS}s')
+        time.sleep(REGISTRATION_RETRY_SECONDS)
+    return False
+
+
 def _heartbeat_loop():
     from game_server.events import seated_players
     while True:
@@ -26,11 +51,11 @@ def _heartbeat_loop():
         if client.heartbeat(seated_players()) == HTTPStatus.NOT_FOUND:
             # Central forgot our registration (a registry reset, say): the
             # players' seats are gone with it, so claim a new id and carry on.
-            client.register(SERVER_HOST, SERVER_PORT)
+            _register()
 
 
 def _drain_outbox():
-    """One delivery pass. Results go first, so the rounds a player finished
+    """Results go first, so the rounds a player finished
     reach central before their buy-in is settled."""
     for round_id, results in outbox.pending():
         if not client.send_results(round_id, results):
@@ -67,15 +92,7 @@ def create_app():
 
     socketio.init_app(app)
 
-    # Service discovery with retry: central may be down or partitioned at boot.
-    for attempt in range(1, REGISTRATION_ATTEMPTS + 1):
-        if client.register(SERVER_HOST, SERVER_PORT):
-            print(f'[central] registered as server {client.server_id}')
-            break
-        print(f'[central] registration attempt {attempt}/{REGISTRATION_ATTEMPTS} failed, '
-              f'retrying in {REGISTRATION_RETRY_SECONDS}s')
-        time.sleep(REGISTRATION_RETRY_SECONDS)
-    else:
+    if not _join_central():
         print('[central] could not register: shutting down')
         sys.exit(1)
 
