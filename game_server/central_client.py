@@ -12,7 +12,7 @@ from game_server.config import (CAPACITY, CENTRAL_URL, LEASE_TIMEOUT,
                                 SHARED_SECRET)
 from shared.messages import CAPACITY as CAPACITY_FIELD
 from shared.messages import (BUY_INS, HOST, PLAYERS, PORT, RESULTS, ROUND_ID,
-                             SERVER_ID, TYP, TYP_SERVER)
+                             SERVER_ID, SETTLED, TYP, TYP_SERVER)
 
 SERVER_TOKEN_TTL = 60
 
@@ -85,16 +85,17 @@ class CentralClient:
 
     def close_buy_ins(self, buy_in_ids):
         """Tell central these players left, so it hands what is left of their
-        buy-ins back to their balance; True only when central ACKed."""
+        buy-ins back to their balance. Returns the ids central settled, or
+        None when it did not answer."""
         try:
             response = requests.post(f'{self.base_url}/api/servers/leave',
                                      json={BUY_INS: list(buy_in_ids)},
                                      headers=self._bearer(), timeout=5)
             response.raise_for_status()
-            return True
-        except requests.RequestException as e:
+            return response.json()[SETTLED]
+        except (requests.RequestException, KeyError, ValueError) as e:
             print(f'[central] closing buy ins {buy_in_ids} failed: {e}')
-            return False
+            return None
 
 
 client = CentralClient(CENTRAL_URL)

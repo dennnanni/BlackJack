@@ -34,11 +34,21 @@ def _drain_outbox():
     reach central before their buy-in is settled."""
     for round_id, results in outbox.pending():
         if not client.send_results(round_id, results):
-            return  # central unreachable: back off, retry from the oldest
+            return
         outbox.ack(round_id)
     leaves = outbox.pending_leaves()
-    if leaves and client.close_buy_ins(leaves):
-        outbox.ack_leaves(leaves)
+    if not leaves:
+        return
+    settled = client.close_buy_ins(leaves)
+    if settled is None:
+        return
+    refused = []
+    for buy_in_id in leaves:
+        if buy_in_id not in settled:
+            refused.append(buy_in_id)
+    if refused:
+        print(f'[central] buy ins {refused} were not settled: they belong to another server')
+    outbox.ack_leaves(leaves)
 
 
 def _sender_loop():
