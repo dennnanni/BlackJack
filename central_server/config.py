@@ -25,8 +25,10 @@ SEAT_TAKEOVER = 30
 SEAT_GRACE = 30
 
 # how long an open buy in may sit with nobody holding its seat before auto closing
-BUYIN_GRACE = 120
+BUYIN_GRACE = 240
 
-TRIMMER_INTERVAL = 60 * 10 # 10 minutes
+DEAD_SERVERS_RETENTION = 60 * 60 * 3
+
+TRIMMER_INTERVAL = 120
 
 INITIAL_BALANCE = 1000

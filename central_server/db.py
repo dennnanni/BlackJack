@@ -5,7 +5,7 @@ import uuid
 import logging
 
 from sqlalchemy import (Column, Float, ForeignKey, Index, Integer, Numeric, String,
-                        Table, create_engine, func, literal, or_, update)
+                        Table, create_engine, func, literal, or_, select, update)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
@@ -105,15 +105,17 @@ def register_server(host, port, capacity):
         session.commit()
         return server.id
 
+
 def resurrect_server(server_id, host, port, capacity):
     with SessionLocal() as session:
         server = session.get(GameServer, server_id)
         if server is None:
-            return False
+            return None
         server.host = host
         server.capacity = capacity
         server.port = port
         server.last_seen = time.time()
+        session.commit()
         return server_id
 
 
@@ -142,6 +144,21 @@ def get_alive_servers():
             GameServer.last_seen >= time.time() - HEARTBEAT,
             GameServer.load < GameServer.capacity
         ).all()
+
+
+def remove_dead_servers(retention):
+    with SessionLocal() as session:
+        has_open_buy_in = session.query(BuyIn).filter(
+            BuyIn.server_id == GameServer.id, 
+            BuyIn.closed_at.is_(None)
+        ).exists()
+        deleted = session.query(GameServer).filter(
+            GameServer.last_seen <= time.time() - retention,
+            ~has_open_buy_in
+        ).delete(synchronize_session=False)
+        session.commit()
+        return deleted
+
 
 def take_seat(username, server_id):
     """Add new player seat if player not seated or update the existing one if
