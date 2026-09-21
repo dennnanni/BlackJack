@@ -1,0 +1,696 @@
+\documentclass{scrartcl}
+\usepackage[utf8]{inputenc}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{natbib}
+\usepackage{graphicx}
+\usepackage[textsize=tiny]{todonotes}
+\newcommand{\TODO}[1]{\todo[color=orange!40, inline]{\textbf{TODO} #1}}
+\newcommand{\TODOside}[1]{\todo[color=orange!40]{\textbf{TODO} #1}}
+\newcommand{\NOTE}[1]{\todo[color=green!20, inline]{#1}}
+\newcommand{\NOTEside}[1]{\todo[color=green!20]{#1}}
+\newcommand{\REVIEWNOTE}[1]{\todo[color=violet!20, inline]{\textbf{Review note: } #1}}
+
+\usepackage[section,numberedsection,nonumberlist]{glossaries}
+\makeglossaries
+
+\usepackage{cleveref} % this must be the last package to be loaded
+
+\newglossaryentry{player}{
+    name={Player},
+    description={The entity that interacts with the system by playing}
+}
+
+\newglossaryentry{user}{
+    name={User},
+    description={\emph{see} \gls{player}}
+}
+
+\newglossaryentry{balance}{
+    name={Balance},
+    description={The amount of money the player owns. It is the total amount
+    when shown on the home page, or a partial amount when it refers to a buy-in}
+}
+
+\newglossaryentry{buyin}{
+    name={Buy-in},
+    description={The amount of money the player enters a table with}
+}
+
+\newglossaryentry{centralserver}{
+    name={Central server},
+    description={The server that handles the players' accounts and balances,
+    and dispatches the players to the game servers}
+}
+
+\newglossaryentry{gameserver}{
+    name={Game server},
+    description={The server that hosts the games}
+}
+
+\newglossaryentry{dealer}{
+    name={Dealer},
+    description={The bot the players play against}
+}
+
+\newglossaryentry{hit}{
+    name={Hit},
+    description={The player's action to request an additional card}
+}
+
+\newglossaryentry{stand}{
+    name={Stand},
+    description={The player's action to end their turn without requesting
+    other cards}
+}
+
+\newglossaryentry{doubledown}{
+    name={Double down},
+    description={The player's action to double the bet, receive exactly one
+    additional card and end their turn}
+}
+
+\newglossaryentry{blackjack}{
+    name={Blackjack},
+    description={A starting hand of exactly two cards, an ace and any
+    ten-value card (10, jack, queen or king), of any suit}
+}
+
+\newglossaryentry{bust}{
+    name={Bust},
+    description={A hand whose total value exceeds 21}
+}
+
+\newglossaryentry{table}{
+    name={Table},
+    description={Where the game takes place}
+}
+
+\newglossaryentry{round}{
+    name={Round},
+    description={One set of bets and actions for each player in a table}
+}
+
+\newglossaryentry{hand}{
+    name={Hand},
+    description={Cards of a player during a round}
+}
+
+\newglossaryentry{sitout}{
+    name={Sit out},
+    description={Player's action to avoid playing the following rounds, they stay
+    as an observer until they leave or sit again}
+}
+
+\newcommand{\emailaddr}[1]{\href{mailto:#1}{\texttt{#1}}}
+
+\title{\LARGE
+    BlackJack\\
+}
+\subtitle{Final Report for the Distributed Systems Course 2024/2025}
+
+% Consider watching:
+% https://www.youtube.com/watch?v=ihxSUsJB_14
+% https://www.youtube.com/watch?v=XTFWaV55uDo
+
+\author{
+    Juri Guglielmi \\ \emailaddr{juri.guglielmi@studio.unibo.it}
+    \and
+    Denise Nanni \\ \emailaddr{denise.nanni@studio.unibo.it}
+}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+The project implements a distributed BlackJack: a central server allows players to register, log in and find a table to play, while game servers handle the game logic. The project’s goal is to provide a distributed platform that handles multiple players in tables, enforcing timed staking and actions, and keeping the players’ money safe across rounds. The central server enforces the correctness of the players’ balances, while the game servers can be scaled out to support an increasing player load.
+
+The application is implemented using Python, Flask, and PostgreSQL, and leverages Docker containers for the local deployment.
+It implements authorization via JWT tokens for the game servers registration and the user join mechanism.
+\end{abstract}
+
+\section*{Disclaimer}
+
+During the preparation of this work, the authors used Claude and Claude Code to refactor the repository after the long break in the development of the project, to simplify and clean the code, and to correct grammar and typos in the report.
+
+After using this tool/service, 
+the authors reviewed and edited the content as needed 
+and take full responsibility for the content of the final report/artifact.
+
+\glsaddall
+\printglossary[title=Glossary]
+\label{glossary}
+
+\section{Concept}\label{concept}
+
+The proposed project is a web application to play BlackJack online.
+The nature of the game is single-player, with the user playing against the dealer, but this project implements it with multi-player tables and turns to represent the real experience of the casinos.
+The project is implemented with local hosting on a single machine, but it is designed to scale to a geographically distributed online application with proper hosting.
+The core entities of the system are the central server and the game servers: the central server handles the users' data (i.e. username, password, balance and buy-ins) and the results data, and dispatches the players to the game servers, which manage the tables and the game lifecycle.
+The only human role is the player, while the game servers are autonomous actors that register themselves with the central server.
+
+The users can access the application via browser, either desktop or mobile, and register and login to their account, receiving a default starting balance.
+Then, the players can join a table and start betting.
+The users interact with the system during the game by placing bets, take actions on their hand, sit out or leave the table.
+Betting happens simultaneously for every player in the table, but playing happens in turns.
+A round has a duration of about 2 minutes, depending on how long it takes for players to complete their turn.
+Interactions with the game servers are mildly frequent, with an average of three or four actions per user per round.
+
+Since the majority of the users' interactions happen towards the game servers, distribution is useful to decouple the games from the coordination, scale the games capacity on request and increase fault-tolerance of the games.
+However, the central server represents a single point of failure of the system.
+
+
+% \NOTE{Instructions below}
+% Here you should explain:
+
+% \begin{itemize}
+%   \item The type of product developed with that project, for example (non-exhaustive):
+%   %
+%   \begin{itemize}
+%     \item Application (with GUI, be it mobile, web, or desktop)
+%     \item Command-line application (CLI could be used by humans or scripts)
+%     \item Library
+%     \item Web-service(s)
+%   \end{itemize}
+
+%   \item Use case description:
+%   %
+%   \begin{itemize}
+%     \item \emph{what} is the software doing?
+%     \item \emph{where} are the users?
+%     \item \emph{when} and \emph{how frequently} do they interact with the system?
+%     \item \emph{how} do they \emph{interact} with the system? which \emph{devices} are they using?
+%     \item does the system need to \emph{store} user's \textbf{data}? \emph{which}? \emph{where}?
+%     \item most likely, there will be \emph{multiple} \textbf{roles}
+%   \end{itemize}
+
+%   \item Why is distribution needed?
+%   %
+%   \begin{itemize}
+%     \item geographically distributed environments?
+%     \item computation speedup?
+%     \item resource sharing?
+%     \item fault tolerance?
+%     \item other reasons?
+%   \end{itemize}
+%   %
+%   In any case, please elaborate.
+% \end{itemize}
+
+\section{Requirements}\label{requirements}
+\subsection*{Functional}
+\begin{itemize}
+    \item The user can register and log in
+    \item The user can enter a table with all or part of their balance
+    \item The user can place a bet at the beginning of a round
+    \item The user can see the other players' bets and hands
+    \item The user can take actions on their hand (hit, stand, double down)
+    \item The user can sit out in any moment, with the action becoming effective at the beginning of the next round
+    \item The user can leave the table in any moment, automatically losing their bet if the round is ongoing
+    \item The user can lose no more than their initial buy-in in a table
+    \item The user can win money with a 1:1 ratio for each round
+\end{itemize}
+\subsection*{Non-functional}
+\begin{itemize}
+    \item The game servers should accept only logged users dispatched to them from the central server
+    \item The game servers should be reactive and enforce a time window for betting and taking actions for each player
+    \item The central server should balance the load when dispatching to game servers
+    \item The central server should accept registrations only from legitimate game servers
+    \item The system should enforce eventual consistency of the total balance of a player
+    \item The system should tolerate faults to game servers, allowing the users to start new rounds in other servers
+\end{itemize}
+\subsection*{Implementation}
+\begin{itemize}
+    \item Docker-based structure to allow for single-machine deployment
+\end{itemize}
+
+\newpage
+
+% \NOTE{Instructions}
+
+% \begin{itemize}
+%   \item The requirements must explain \textbf{what} (not how) the software
+%   being produced should do.
+%   %
+%   \begin{itemize}
+%     \item you should not focus on the particular problems, but exclusively on
+%     what you want the application to do.
+%   \end{itemize}
+
+%   \item Requirements must be clearly identified, and possibly numbered
+
+%   \item Requirements are divided into:
+%   %
+%   \begin{itemize}
+%     \item \textbf{Functional}: some functionality the software should provide to the user
+
+%     \item \textbf{Non-functional}: requirements that do not directly concern behavioural aspects, such as consistency, availability, etc.
+
+%     \item \textbf{Implementation}: constrain the entire phase of system realization, 
+%     for instance by requiring the use of a specific programming language and/or a specific software tool
+%     %
+%     \begin{itemize}
+%       \item these constraints should be adequately justified by political / economic / administrative reasons\ldots{}
+%       \item \ldots{} otherwise, implementation choices should emerge \emph{as  a consequence of} design
+%     \end{itemize}
+%   \end{itemize}
+
+%   \item If there are domain-specific terms, these should be explained in a glossary
+  
+%   \item Each requirement must have its own \textbf{acceptance criterion}
+%   %
+%   \begin{itemize}
+%     \item these will be important for the validation phase
+%   \end{itemize}
+% \end{itemize}
+
+\subsection{Relevant Distributed System Features}
+\label{ds-features}
+
+Motivate which distributed system features are relevant for your project, and which are not.
+%
+\begin{itemize}
+  \item transparency
+  \begin{itemize}
+    \item does your system need to hide distribution details from users or developers?
+    \item is it important that failures, location, or replication are invisible?
+  \end{itemize}
+
+  \item fault tolerance, dependability -- availability, reliability, integrity, maintainability, safety
+  \begin{itemize}
+    \item what happens if a component fails? is uninterrupted service required?
+    \item is data loss or corruption unacceptable?
+    \item how quickly must the system recover from faults?
+  \end{itemize}
+
+  \item scalability
+  \begin{itemize}
+    \item will the system need to handle increasing numbers of users, requests, or data?
+    \item is it expected to grow over time?
+  \end{itemize}
+
+  \item security, trust
+  \begin{itemize}
+    \item is sensitive data being processed or stored?
+    \item are there multiple user roles with different permissions?
+    \item is authentication or authorization required?
+  \end{itemize}
+
+  \item resource sharing
+  \begin{itemize}
+    \item do multiple users or components need access to shared resources?
+    \item is coordination or synchronization needed?
+  \end{itemize}
+
+  \item openness, interoperability, heterogeneity of components
+  \begin{itemize}
+    \item Will your system interact with external systems or use components built with different technologies?
+    \item Is standardization or compatibility important?
+  \end{itemize}
+
+  \item evolvability, maintainability
+  \begin{itemize}
+    \item Will the system need to be updated or extended after deployment?
+    \item Is long-term maintenance a concern?
+  \end{itemize}
+
+  \item performance, concurrency, computation / communication efficiency, bandwidth
+  \begin{itemize}
+    \item Are there strict requirements on response time or throughput?
+    \item Will many operations happen in parallel?
+    \item Is network usage a concern?
+  \end{itemize}
+
+  \item economy, costs  
+  \begin{itemize}
+    \item Are there budget constraints for development, deployment, or operation?
+    \item Is minimizing resource usage important?
+  \end{itemize}
+\end{itemize}
+
+\section{Design}\label{design}
+
+This chapter explains the strategies used to meet the requirements identified in the analysis. 
+%
+Ideally, the design should be the same, regardless of the technological choices made during the implementation phase.
+
+\begin{quote}
+You can re-arrange the sections as you prefer, but all the sections must be present in the end
+\end{quote}
+
+\noindent
+\textbf{Important:} try to motivate your design choices in relation to the requirements and features identified 
+in \cref{requirements} and \cref{ds-features}.
+
+\subsection{Architecture}\label{architecture}
+
+\begin{itemize}
+  \item Which architectural style?
+  %
+  \begin{itemize}
+    \item why?
+  \end{itemize}
+\end{itemize}
+
+\subsection{Infrastructure}\label{infrastructure}
+
+\begin{itemize}
+  \item are there \emph{infrastructural components} that need to be introduced? \emph{how many}?
+  %
+  \begin{itemize}
+    \item e.g.~\emph{clients}, \emph{servers}, \emph{load balancers},
+    \emph{caches}, \emph{databases}, \emph{message brokers},
+    \emph{queues}, \emph{workers}, \emph{proxies}, \emph{firewalls},
+    \emph{CDNs}, \emph{etc.}
+  \end{itemize}
+
+  \item how do components \emph{distribute} over the network? \emph{where}?
+  %
+  \begin{itemize}
+    \item e.g.~do servers / brokers / databases / etc. sit on the same
+    machine? on the same network? on the same datacenter? on the same
+    continent?
+  \end{itemize}
+
+  \item how do components \emph{find} each other?
+  %
+  \begin{itemize}
+    \item how to \emph{name} components?
+    \item e.g.~DNS, \emph{service discovery}, \emph{load balancing},
+    \emph{etc.}
+  \end{itemize}
+\end{itemize}
+
+\begin{quote}
+Component diagrams are welcome here
+\end{quote}
+
+\subsection{Modelling}\label{modelling}
+
+\begin{itemize}
+  \item which \textbf{domain entities} are there?
+  %
+  \begin{itemize}
+    \item e.g.~\emph{users}, \emph{products}, \emph{orders}, \emph{etc.}
+  \end{itemize}
+  
+  \item how do \emph{domain entities} \textbf{map to} \emph{infrastructural components}?
+  %
+  \begin{itemize}
+    \item e.g.~state of a video game on central server, while inputs/representations on clients
+    \item e.g.~where to store messages in an IM app? for how long?
+  \end{itemize}
+
+  \item which \textbf{domain events} are there?
+  %
+  \begin{itemize}
+    \item e.g.~\emph{user registered}, \emph{product added to cart}, \emph{order placed}, \emph{etc.}
+  \end{itemize}
+  
+  \item which sorts of \textbf{messages} are exchanged?
+  %
+  \begin{itemize}
+    \item e.g.~\emph{commands}, \emph{events}, \emph{queries}, \emph{etc.}
+  \end{itemize}
+
+  \item what information does the \textbf{state} of the system comprehend
+  %
+  \begin{itemize}
+    \item e.g.~\emph{users' data}, \emph{products' data}, \emph{orders' data}, \emph{etc.}
+  \end{itemize}
+\end{itemize}
+
+\begin{quote}
+Class diagram are welcome here
+\end{quote}
+
+\subsection{Interaction}\label{interaction}
+
+\begin{itemize}
+  \item how do components \emph{communicate}? \emph{when}? \emph{what}?
+  \item \emph{which} \textbf{interaction patterns} do they enact?
+\end{itemize}
+
+\begin{quote}
+Sequence diagrams are welcome here
+\end{quote}
+
+\subsection{Behaviour}\label{behaviour}
+
+\begin{itemize}
+  \item how does \emph{each} component \textbf{behave} individually (e.g.~in \emph{response} to \emph{events} or messages)?
+  \begin{itemize}
+    \item some components may be \emph{stateful}, others \emph{stateless}
+  \end{itemize}
+
+  \item which components are in charge of updating the \textbf{state} of the system? \emph{when}? \emph{how}?
+\end{itemize}
+
+\begin{quote}
+State diagrams are welcome here
+\end{quote}
+
+\subsection{Data and Consistency Issues}\label{data-and-consistency-issues}
+
+\begin{itemize}
+  \item Is there any data that needs to be stored?
+  %
+  \begin{itemize}
+    \item \emph{what} data? \emph{where}? \emph{why}?
+  \end{itemize}
+  
+  \item how should \emph{persistent data} be \textbf{stored}?
+  %
+  \begin{itemize}
+    \item e.g.~relations, documents, key-value, graph, etc.
+    \item why?
+  \end{itemize}
+  
+  \item Which components perform queries on the database?
+  %
+  \begin{itemize}
+    \item \emph{when}? \emph{which} queries? \emph{why}?
+    \item concurrent read? concurrent write? why?
+  \end{itemize}
+  
+  \item Is there any data that needs to be shared between components?
+  %
+  \begin{itemize}
+    \item \emph{why}? \emph{what} data?
+  \end{itemize}
+\end{itemize}
+
+\subsection{Fault-Tolerance}\label{fault-tolerance}
+
+\begin{itemize}
+  \item Is there any form of data \textbf{replication} / federation / sharing?
+  %
+  \begin{itemize}
+    \item \emph{why}? \emph{how} does it work?
+  \end{itemize}
+  
+  \item Is there any \textbf{heart-beating}, \textbf{timeout}, \textbf{retry mechanism}?
+  %
+  \begin{itemize}
+    \item \emph{why}? \emph{among} which components? \emph{how} does it work?
+  \end{itemize}
+  
+  \item Is there any form of \textbf{error handling}?
+  %
+  \begin{itemize}
+    \item \emph{what} happens when a component fails? \emph{why}? \emph{how}?
+  \end{itemize}
+\end{itemize}
+
+\subsection{Availability}\label{availability}
+
+\begin{itemize}
+  \item Is there any \textbf{caching} mechanism?
+  %
+  \begin{itemize}
+    \item \emph{where}? \emph{why}?
+  \end{itemize}
+  
+  \item Is there any form of \textbf{load balancing}?
+  %
+  \begin{itemize}
+    \item \emph{where}? \emph{why}?
+  \end{itemize}
+
+  \item In case of \textbf{network partitioning}, how does the system behave?
+  %
+  \begin{itemize}
+    \item \emph{why}? \emph{how}?
+  \end{itemize}
+\end{itemize}
+
+\subsection{Security}\label{security}
+
+\begin{itemize}
+  \item Is there any form of \textbf{authentication}?
+  %
+  \begin{itemize}
+    \item \emph{where}? \emph{why}?
+  \end{itemize}
+
+  \item Is there any form of \textbf{authorization}?
+  %
+  \begin{itemize}
+    \item which sort of \emph{access control}?
+    \item which sorts of users / \emph{roles}? which \emph{access rights}?
+  \end{itemize}
+
+  \item Are \textbf{cryptographic schemas} being used?
+  %
+  \begin{itemize}
+    \item e.g.~token verification,
+    \item e.g.~data encryption, etc.
+  \end{itemize}
+\end{itemize}
+
+\section{Implementation}\label{implementation}
+
+Please report here all the implementation (technology-dependent) choices you made while implementing your design.
+
+\begin{quote}
+  If you run out of time for this project, you may consider leaving some aspect unimplemented, 
+  and simply discuss how you would have implemented them.
+  %
+  In this case, better would be to discuss unimplemented features in \cref{future-works}.
+\end{quote}
+
+\begin{itemize}
+  \item which \textbf{network protocols} to use?
+  %
+  \begin{itemize}
+    \item e.g.~UDP, TCP, HTTP, WebSockets, gRPC, XMPP, AMQP, MQTT, etc.
+  \end{itemize}
+  
+  \item how should \emph{in-transit data} be \textbf{represented}?
+  %
+  \begin{itemize}
+    \item e.g.~JSON, XML, YAML, Protocol Buffers, etc.
+  \end{itemize}
+  
+  \item how should \emph{databases} be \textbf{queried}?
+  %
+  \begin{itemize}
+    \item e.g.~SQL, NoSQL, etc.
+  \end{itemize}
+  
+  \item how should components be \emph{authenticated}?
+  %
+  \begin{itemize}
+    \item e.g.~OAuth, JWT, etc.
+  \end{itemize}
+
+  \item how should components be \emph{authorized}?
+  %
+  \begin{itemize}
+    \item e.g.~RBAC, ABAC, etc.
+  \end{itemize}
+\end{itemize}
+
+\subsection{Technological details}\label{technological-details}
+
+\begin{itemize}
+  \item any particular \emph{framework} / \emph{technology} being exploited goes here
+\end{itemize}
+
+\section{Validation}\label{validation}
+
+\subsection{Automatic Testing}\label{automatic-testing}
+
+\begin{itemize}
+  \item how were individual components \textbf{\emph{unit}-test}ed?
+  
+  \item how was communication, interaction, and/or integration among components tested?
+  
+  \item how to \textbf{\emph{end-to-end}-test} the system?
+  %
+  \begin{itemize}
+    \item e.g.~production vs.~test environment
+  \end{itemize}
+
+  \item for each test specify:
+  %
+  \begin{itemize}
+    \item rationale of individual tests
+    \item how were the test automated
+    \item how to run them
+    \item which requirement they are testing, if any
+  \end{itemize}
+\end{itemize}
+
+\begin{quote}
+recall that \emph{deployment} \textbf{automation} is commonly used to \emph{test} the system in \emph{production-like} environment
+\end{quote}
+
+\begin{quote}
+recall to test corner cases (crashes, errors, etc.)
+\end{quote}
+
+\subsection{Acceptance test}\label{acceptance-test}
+
+\begin{itemize}
+  \item did you perform any \emph{manual} testing?
+  %
+  \begin{itemize}
+    \item what did you test?
+    \item why wasn't it automatic?
+  \end{itemize}
+\end{itemize}
+
+\section{Deployment}\label{deployment}
+
+\begin{itemize}
+  \item should one install your software from scratch, how to do it?
+  %
+  \begin{itemize}
+    \item provide instructions
+    \item provide expected outcomes
+  \end{itemize}
+
+  \item what software should be installed on the machines to run your project? which versions?
+  
+  \item should one set environment variables or configuration files?
+  
+  \item if you're using containerization (e.g.~Docker), 
+  describe how you engineered your deployment scrips (e.g. \texttt{docker-compose.yml} files)
+\end{itemize}
+
+\section{User Guide}\label{user-guide}
+
+\begin{itemize}
+  \item how to use your software?
+  %
+  \begin{itemize}
+    \item provide instructions
+    \item provide expected outcomes
+    \item provide screenshots if possible
+  \end{itemize}
+\end{itemize}
+
+\section{Self-evaluation}\label{self-evaluation}
+
+\begin{itemize}
+  \item An individual section is required for each member of the group
+  \item Each member must self-evaluate their work, listing the strengths and weaknesses of the product
+  \item Each member must describe their role within the group as objectively as possible.
+\end{itemize}
+
+It should be noted that each student is only responsible for their own section.
+
+\section{Future works}\label{future-works}
+
+Discuss possible future works, improvements, extensions, optimizations, etc.
+
+Also discuss here any unimplemented feature, and how you would have implemented it.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
