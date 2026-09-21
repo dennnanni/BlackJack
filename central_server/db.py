@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from central_server.config import DATABASE_URL, HEARTBEAT, SEAT_GRACE, SEAT_TAKEOVER
+from shared.messages import BUY_IN_ID, ERROR
 
 engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(bind=engine)
@@ -67,6 +68,19 @@ class AppliedRound(Base):
 
     round_id = Column(String, primary_key=True)
     applied_at = Column(Float, nullable=False)
+
+class UnappliedResult(Base):
+    __tablename__ = 'unapplied_result'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    round_id = Column(String, nullable=False)
+    server_id = Column(Integer, nullable=False)
+    username = Column(String, nullable=False)
+    buy_in_id = Column(String)
+    balance_difference = Column(Numeric(10, 2), nullable=False)
+    reason = Column(String, nullable=False)
+    recorded_at = Column(Float, nullable=False)
+
 
 def init_db():
     Base.metadata.create_all(bind=engine)
@@ -192,9 +206,14 @@ def close_buy_in(server_id, buy_in_ids):
     with SessionLocal() as session:
         for id in buy_in_ids:
             buy_in = session.get(BuyIn, id, with_for_update=True)
-            if buy_in and buy_in.server_id == server_id and buy_in.closed_at is None:
-                _settle(session, buy_in)
+            if buy_in is None:
                 closed.append(id)
+                continue
+            if buy_in.server_id == server_id:
+                continue
+            if buy_in.closed_at is None:
+                _settle(session, buy_in)
+            closed.append(id)
         session.commit()
     return closed
 
@@ -221,9 +240,13 @@ def close_abandoned_buy_ins(grace):
 
 def _get_buy_in(session, server_id, result):
     buy_in = session.get(BuyIn, result.buy_in_id, with_for_update=True)
-    if buy_in is None or buy_in.server_id != server_id or buy_in.username != result.username:
-        return None
-    return buy_in
+    if buy_in is None:
+        return None, 'Unknown buy in'
+    if buy_in.server_id != server_id:
+        return None, 'Buy in belong to another server'
+    if buy_in.username != result.username:
+        return None, 'Buy in belongs to another user'
+    return buy_in, None
 
 
 def apply_round(round_id, server_id, results):
@@ -232,9 +255,17 @@ def apply_round(round_id, server_id, results):
         if session.get(AppliedRound, round_id) is not None:
             return
         now = time.time()
+        rejected = []
         for result in results:
-            buy_in = _get_buy_in(session, server_id, result)
+            buy_in, reason = _get_buy_in(session, server_id, result)
             if buy_in is None:
+                session.add(UnappliedResult(
+                    round_id = round_id, server_id=server_id, 
+                    username=result.username, buy_in_id=result.buy_in_id,
+                    balance_difference=Decimal(str(result.balance_difference)),
+                    reason=reason, recorded_at=now
+                ))
+                rejected.append({BUY_IN_ID: result.buy_in_id, ERROR: reason})
                 logger.error(f'Server {server_id} reported a result for {result.username} with no buy in in that server')
                 continue
 
@@ -259,6 +290,7 @@ def apply_round(round_id, server_id, results):
 
         session.add(AppliedRound(round_id=round_id, applied_at=now))
         session.commit()
+        return rejected
 
 def prune_old_rounds(max_age):
     """Drop applied rounds entries old enough that no retry can still happen"""

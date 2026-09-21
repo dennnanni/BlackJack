@@ -1,12 +1,14 @@
 """HTTP API the game servers call."""
 from http import HTTPStatus
+import logging
 from central_server import db
 from central_server import auth
-from shared.messages import BUY_INS, CAPACITY, ERROR, ROUND_ID, SERVER_ID, SUCCESS, RESULTS, HOST, PORT, PLAYERS, Result
+from shared.messages import BUY_INS, CAPACITY, SETTLED, ERROR, REJECTED, ROUND_ID, SERVER_ID, SUCCESS, RESULTS, HOST, PORT, PLAYERS, Result
 from flask import Blueprint, jsonify, request
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/servers')
 
+logger = logging.getLogger(__name__)
 
 @api_bp.route('/register', methods=['POST'])
 def register():
@@ -37,7 +39,10 @@ def results():
     except:
         return jsonify({ERROR: 'Malformed results payload'}), HTTPStatus.BAD_REQUEST
 
-    db.apply_round(round_id, server_id, results)
+    # used mainly for logging purposes
+    rejected = db.apply_round(round_id, server_id, results)
+    if rejected is not None:
+        logger.warning(f'Some of the results were rejected: {rejected}')
     return jsonify({SUCCESS: True}), HTTPStatus.OK
 
 @api_bp.route('/leave', methods=['POST'])
@@ -52,8 +57,8 @@ def leave():
     if not isinstance(buy_ins, list):
         return jsonify({ERROR: 'buy_ins is required'}), HTTPStatus.BAD_REQUEST
 
-    db.close_buy_in(server_id, buy_ins)
-    return jsonify({SUCCESS: True}), HTTPStatus.OK
+    settled = db.close_buy_in(server_id, buy_ins)
+    return jsonify({SUCCESS: True, SETTLED: settled}), HTTPStatus.OK
 
 @api_bp.route('/heartbeat', methods=['POST'])
 def heartbeat():

@@ -24,6 +24,7 @@ BUY_IN = 'buy_in'
 USERNAME = 'username'
 BALANCE = 'balance'
 BALANCE_DIFFERENCE = 'balance_difference'
+SETTLED = 'settled'
 
 @dataclass
 class Result:
