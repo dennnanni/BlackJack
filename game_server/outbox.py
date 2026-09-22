@@ -17,6 +17,9 @@ class Outbox:
             conn.execute('CREATE TABLE IF NOT EXISTS pending_leave ('
                          'buy_in_id TEXT PRIMARY KEY,'
                          'created_at REAL NOT NULL)')
+            conn.execute('CREATE TABLE IF NOT EXISTS seated ('
+                         'buy_in_id TEXT PRIMARY KEY,'
+                         'created_at REAL NOT NULL)')
             conn.execute('CREATE TABLE IF NOT EXISTS identity ('
                          'id INTEGER PRIMARY KEY CHECK (id = 0),'
                          'server_id INTEGER NOT NULL)')
@@ -59,11 +62,28 @@ class Outbox:
         with self._connection() as conn:
             conn.execute('DELETE FROM pending WHERE round_id = ?', (round_id,))
 
+    def seat(self, buy_in_id):
+        """A player sat down with this buy-in."""
+        with self._connection() as conn:
+            conn.execute('INSERT OR IGNORE INTO seated VALUES (?, ?)',
+                         (buy_in_id, time.time()))
+
     def enqueue_leave(self, buy_in_id):
         """A player left the table: central must close their buy-in."""
         with self._connection() as conn:
+            conn.execute('DELETE FROM seated WHERE buy_in_id = ?', (buy_in_id,))
             conn.execute('INSERT OR IGNORE INTO pending_leave VALUES (?, ?)',
                          (buy_in_id, time.time()))
+
+    def abandon_seats(self):
+        """Turn every seated buy-in into a pending leave. Used at startup,
+            when whoever was seated before the restart is gone."""
+        with self._connection() as conn:
+            rows = conn.execute('SELECT buy_in_id FROM seated').fetchall()
+            conn.execute('INSERT OR IGNORE INTO pending_leave '
+                         'SELECT buy_in_id, ? FROM seated', (time.time(),))
+            conn.execute('DELETE FROM seated')
+        return [buy_in_id for (buy_in_id,) in rows]
 
     def pending_leaves(self):
         """Buy-ins still to close, oldest first."""

@@ -35,6 +35,9 @@ def _join_central():
     if client.server_id is not None:
         print(f'[central] restarting: sending the outbox and asking back server id '
               f'{client.server_id}')
+    left = outbox.abandon_seats()
+    if left:
+        print(f'[central] closing the buy ins of {len(left)} players seated before the crash')
     for attempt in range(1, REGISTRATION_ATTEMPTS + 1):
         if _drain_outbox() and _register():
             print(f'[central] registered as server {client.server_id}')
@@ -50,9 +53,8 @@ def _heartbeat_loop():
     while True:
         time.sleep(HEARTBEAT_INTERVAL)
         if client.heartbeat(seated_players()) == HTTPStatus.NOT_FOUND:
-            # Central forgot our registration (a registry reset, say): the
-            # players' seats are gone with it, so claim a new id and carry on.
-            _register()
+            # Central lost our id. register for a new one.
+             _register()
 
 
 def _drain_outbox():

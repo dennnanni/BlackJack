@@ -145,6 +145,7 @@ def register_event_handlers(socketio):
                                             'back to the central server to play again'})
             return
         seated_buy_ins.add(buy_in_id)
+        outbox.seat(buy_in_id)
 
         user = User(username, session['balance'], buy_in_id)
         user_map[username] = user

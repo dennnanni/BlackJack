@@ -18,10 +18,8 @@ ROUND_RESULT_DELAY = 7      # show the outcome and final hands before the table 
 LEASE_CHECK_SECONDS = 1    # how often does a freezer table check the lease
 IDLE_ROUND_SECONDS = 3
 
-# A player whose socket dropped is still waited for this long, so that a page
-# reload does not cost them their bet or their turn; after it the table moves on.
-ABSENT_GRACE_SECONDS = 5
-WAIT_POLL_SECONDS = 0.5    # how often a waiting table checks who is still around
+ABSENT_GRACE_SECONDS = 5    # wait for a disconnected player
+WAIT_POLL_SECONDS = 0.5     # how often a waiting table checks who is still around
 
 class GameLoop(Thread):
     def __init__(self, table):
@@ -47,9 +45,8 @@ class GameLoop(Thread):
         return max(0.0, self.bet_deadline - time.monotonic())
 
     def run(self):
-        # Keep offering rounds for as long as anyone is seated. Each iteration
-        # is a full round; nothing here waits for a human to restart it, only
-        # the lease can hold the next one back.
+        """Keep offering rounds for as long as anyone is seated. Each iteration
+        is a full round; only the lease can hold the next one back."""
         while self.table.is_ready_to_start():
             self._await_lease()
             if not self.table.is_ready_to_start():
@@ -63,12 +60,9 @@ class GameLoop(Thread):
         self.running = False
 
     def _await_lease(self):
-        """Freezes new rounds until the lease expires. 
-
-            Prevents player funds from being committed if the connection to the center is lost
-            (as the center might reassign seats). The table pauses without ejecting anyone
-            and resumes automatically once the connection is restored. Rounds already in progress
-            are always completed normally and sent to the outbox."""
+        """Hold new rounds while the lease is expired. 
+            If we lose contact with central, it may reassign our players' seats, so we
+            must not stake their money. When the lease is restored, the table can continue with the next round."""
         if client.lease_valid():
             return
         socketio.emit('lease_expired', {'table': self.table.id}, to=self.room_id)
@@ -94,7 +88,7 @@ class GameLoop(Thread):
                 game.remove_active_user(user)
 
         if not game.active_users:
-            # No one is playing, waiting
+            # No one is playing,  waiting
             socketio.emit('table_idle', {'table': table_id}, to=self.room_id)
             socketio.sleep(IDLE_ROUND_SECONDS)
             self._end_round()
@@ -147,7 +141,7 @@ class GameLoop(Thread):
             self._run_turn(game, user)
         self.current_player = None
 
-        # Phase 3: The dealer completes the hand starting from the face-up card,
+        # Phase 3: The dealer completes the hand starting from the face-up card
         socketio.sleep(PRE_DEALER_DELAY)
         socketio.emit('dealer_turn', {'table': table_id}, to=self.room_id)
         while Hand.get_hand_value(game.dealer_hand) < Game.DEALER_STAND_VALUE:

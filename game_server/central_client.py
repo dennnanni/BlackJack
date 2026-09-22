@@ -24,10 +24,8 @@ class CentralClient:
         self._last_contact = time.monotonic()
 
     def lease_valid(self):
-        """True while we may still stake our players' balances: with
-        LEASE_TIMEOUT < SEAT_TAKEOVER_TTL the lease dies here before central
-        can reassign those seats, so two servers never stake the same balance.
-        """
+        """True if central answered a register or heartbeat in the last
+        LEASE_TIMEOUT seconds. While it is False the tables start no new rounds"""
         return time.monotonic() - self._last_contact < LEASE_TIMEOUT
 
     def _bearer(self):
