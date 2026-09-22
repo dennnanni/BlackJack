@@ -161,6 +161,7 @@ Interactions with the game servers are mildly frequent, with an average of three
 
 Since the majority of the users' interactions happen towards the game servers, distribution is useful to decouple the games from the coordination, scale the games capacity on request and increase fault-tolerance of the games.
 However, the central server represents a single point of failure of the system.
+The only human role in the system is the player, as the servers are autonomous actors.
 
 
 % \NOTE{Instructions below}
@@ -202,7 +203,7 @@ However, the central server represents a single point of failure of the system.
 
 \section{Requirements}\label{requirements}
 \subsection*{Functional}
-\begin{itemize}
+\begin{enumerate}
     \item The user can register and log in
     \item The user can enter a table with all or part of their balance
     \item The user can place a bet at the beginning of a round
@@ -212,20 +213,24 @@ However, the central server represents a single point of failure of the system.
     \item The user can leave the table in any moment, automatically losing their bet if the round is ongoing
     \item The user can lose no more than their initial buy-in in a table
     \item The user can win money with a 1:1 ratio for each round
-\end{itemize}
+\end{enumerate}
 \subsection*{Non-functional}
-\begin{itemize}
+\begin{enumerate}
     \item The game servers should accept only logged users dispatched to them from the central server
-    \item The game servers should be reactive and enforce a time window for betting and taking actions for each player
+    \item The game servers should enforce a time window for betting and taking actions for each player
+    \item Resurrected game servers should be able to re-register and be reinstated with the same id, unless the id is expired
     \item The central server should balance the load when dispatching to game servers
     \item The central server should accept registrations only from legitimate game servers
-    \item The system should enforce eventual consistency of the total balance of a player
+    \item The central server should accept registration of new game servers at runtime
+    \item The central server should remove game servers that have been dead for more than three hours
+    \item The system should apply the round results exactly once
+    \item The system should enforce eventual consistency of the total balance of a player 
     \item The system should tolerate faults to game servers, allowing the users to start new rounds in other servers
-\end{itemize}
+\end{enumerate}
 \subsection*{Implementation}
-\begin{itemize}
-    \item Docker-based structure to allow for single-machine deployment
-\end{itemize}
+\begin{enumerate}
+    \item Docker-based structure to allow for single-machine deployment and reproducibility
+\end{enumerate}
 
 \newpage
 
