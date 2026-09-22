@@ -13,6 +13,8 @@ CENTRAL_PORT = int(os.getenv('CENTRAL_PORT', '5002'))
 
 # Flask session-cookie key
 SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError('SECRET_KEY is not set in environment file')
 
 # validity period for the join token in seconds
 JOIN_TOKEN_TTL = 120

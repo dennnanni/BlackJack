@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 @api_bp.route('/register', methods=['POST'])
 def register():
-    auth_token = auth.verify_server_token(request.headers.get('Authorization'))
+    auth_token = auth.verify_server_token(request.headers.get('Authorization'), require_server_id=False)
     if auth_token is None:
         return jsonify({ERROR: 'Missing or invalid server token'}), HTTPStatus.UNAUTHORIZED
 
@@ -49,7 +49,7 @@ def results():
 
     # used mainly for logging purposes
     rejected = db.apply_round(round_id, server_id, results)
-    if rejected is not None:
+    if rejected:
         logger.warning(f'Some of the results were rejected: {rejected}')
     return jsonify({SUCCESS: True}), HTTPStatus.OK
 

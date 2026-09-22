@@ -185,7 +185,7 @@ def take_seat(username, server_id):
 def create_buy_in(username, server_id, buy_in):
     """Creates the buy in row reserving an amount from the user balance"""
     with SessionLocal() as session:
-        user = session.get(User, username)
+        user = session.get(User, username, with_for_update=True)
         if user is None:
             raise ValueError('Unknown user')
 
@@ -237,7 +237,7 @@ def close_buy_in(server_id, buy_in_ids):
             if buy_in is None:
                 closed.append(id)
                 continue
-            if buy_in.server_id == server_id:
+            if buy_in.server_id != server_id:
                 continue
             if buy_in.closed_at is None:
                 _settle(session, buy_in)
@@ -281,7 +281,8 @@ def apply_round(round_id, server_id, results):
     """Apply each result's balance change to its player exactly once."""
     with SessionLocal() as session:
         if session.get(AppliedRound, round_id) is not None:
-            return
+            logger.info(f'Round {round_id} from server {server_id} already applied, skipping')
+            return []
         now = time.time()
         rejected = []
         for result in results:

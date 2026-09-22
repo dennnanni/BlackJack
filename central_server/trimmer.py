@@ -6,10 +6,11 @@ from central_server.config import BUYIN_GRACE, DEAD_SERVERS_RETENTION, TRIMMER_I
 
 APPLIED_ROUND_RETENTION = 7 * 24 * 3600 # a week
 
-logger = logging.GetLogget(__name__)
+logger = logging.getLogger(__name__)
 
 def _run():
     i = 0
+    deleted, closed = None, []
     while True:
         time.sleep(TRIMMER_INTERVAL)
         i += 1
@@ -22,6 +23,7 @@ def _run():
             logger.info(f'closed {len(closed)} buy ins')
         if deleted: 
             logger.info(f'deleted {len(deleted)} game servers')
+            deleted = None
 
 
 def start_trimmer():

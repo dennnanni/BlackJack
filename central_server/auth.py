@@ -6,7 +6,7 @@ import time
 
 import jwt
 from central_server.config import JOIN_TOKEN_TTL, SHARED_SECRET
-from shared.messages import TYP, TYP_JOIN, TYP_SERVER
+from shared.messages import SERVER_ID, TYP, TYP_JOIN, TYP_SERVER
 
 
 def create_join_token(username, server_id, buy_in_id, buy_in):
@@ -24,12 +24,15 @@ def create_join_token(username, server_id, buy_in_id, buy_in):
 
     return jwt.encode(token, SHARED_SECRET, algorithm='HS256')
 
-def verify_server_token(auth_header):
+def verify_server_token(auth_header, require_server_id=True):
     if not auth_header or not auth_header.startswith('Bearer '):
         return None
     try: 
         payload = jwt.decode(auth_header[7:], SHARED_SECRET, algorithms=['HS256'])
     except:
+        return None
+
+    if require_server_id and not payload.get(SERVER_ID):
         return None
 
     return payload if payload.get(TYP) == TYP_SERVER else None
