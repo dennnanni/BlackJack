@@ -22,7 +22,7 @@ def _run():
         if closed:
             logger.info(f'closed {len(closed)} buy ins')
         if deleted: 
-            logger.info(f'deleted {len(deleted)} game servers')
+            logger.info(f'deleted {deleted} game servers')
             deleted = None
 
 
