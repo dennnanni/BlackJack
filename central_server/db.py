@@ -1,22 +1,30 @@
 """Database layer of the central server."""
+from contextlib import contextmanager
 from decimal import ROUND_DOWN, Decimal, InvalidOperation
 import time
 import uuid
 import logging
 
 from sqlalchemy import (Column, Float, ForeignKey, Index, Integer, Numeric, String,
-                        Table, create_engine, func, literal, or_, select, update)
+                        Table, create_engine, func, literal, or_, select, text, update)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 from central_server.config import DATABASE_URL, HEARTBEAT, SEAT_GRACE, SEAT_TAKEOVER
 from shared.messages import BUY_IN_ID, ERROR
 
-engine = create_engine(DATABASE_URL)
+# pre ping drops pooled connections that died with a database restart
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 logger = logging.getLogger(__name__)
+
+# Advisory lock ids: postgres mutexes shared by all the central replicas
+SCHEMA_LOCK = 1
+TRIMMER_LOCK = 2
+
+IS_POSTGRES = engine.dialect.name == 'postgresql'
 
 class User(Base):
     __tablename__ = 'user'
@@ -82,14 +90,52 @@ class UnappliedResult(Base):
     recorded_at = Column(Float, nullable=False)
 
 
+def _now(session):
+    """Current time from the database clock."""
+    if not IS_POSTGRES:
+        return time.time()
+    return float(session.execute(select(func.extract('epoch', func.now()))).scalar_one())
+
+
 def init_db():
-    Base.metadata.create_all(bind=engine)
+    """Create the tables using the lock to avoid concurrent creations."""
+    with engine.begin() as conn:
+        if IS_POSTGRES:
+            conn.execute(text('SELECT pg_advisory_xact_lock(:id)'), {'id': SCHEMA_LOCK})
+        Base.metadata.create_all(bind=conn)
+
+
+def ping():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text('SELECT 1'))
+        return True
+    except Exception:
+        return False
+
+
+@contextmanager
+def trimmer_lock():
+    """Returns True if this replica got the trimmer lock, False if another
+    replica is trimming right now. The lock is released when the transaction
+    ends or if the connection breaks."""
+    if not IS_POSTGRES:
+        yield True
+        return
+    with engine.begin() as conn:
+        yield conn.execute(text('SELECT pg_try_advisory_xact_lock(:id)'),
+                           {'id': TRIMMER_LOCK}).scalar_one()
 
 
 def add_user(username, password, salt, balance):
+    """False if the username was taken in the meantime by a concurrent sign up."""
     with SessionLocal() as session:
         session.add(User(username=username, password=password, salt=salt, balance=balance))
-        session.commit()
+        try:
+            session.commit()
+        except IntegrityError:
+            return False
+        return True
 
 
 def get_user(username):
@@ -100,7 +146,7 @@ def get_user(username):
 def register_server(host, port, capacity):
     """Insert a new game server; returns its assigned id."""
     with SessionLocal() as session:
-        server = GameServer(host=host, port=port, capacity=capacity, last_seen=time.time())
+        server = GameServer(host=host, port=port, capacity=capacity, last_seen=_now(session))
         session.add(server)
         session.commit()
         return server.id
@@ -114,7 +160,7 @@ def resurrect_server(server_id, host, port, capacity):
         server.host = host
         server.capacity = capacity
         server.port = port
-        server.last_seen = time.time()
+        server.last_seen = _now(session)
         session.commit()
         return server_id
 
@@ -126,11 +172,12 @@ def update_heartbeat(server_id, players):
         if server is None:
             return False
 
+        now = _now(session)
         server.load = len(players)
-        server.last_seen = time.time()
+        server.last_seen = now
         session.query(Seat).filter(
             Seat.server_id == server_id,
-            Seat.since < time.time() - SEAT_GRACE,
+            Seat.since < now - SEAT_GRACE,
             Seat.username.notin_(players)
         ).delete()
 
@@ -141,7 +188,7 @@ def update_heartbeat(server_id, players):
 def get_alive_servers():
     with SessionLocal() as session:
         return session.query(GameServer).filter(
-            GameServer.last_seen >= time.time() - HEARTBEAT,
+            GameServer.last_seen >= _now(session) - HEARTBEAT,
             GameServer.load < GameServer.capacity
         ).all()
 
@@ -153,7 +200,7 @@ def remove_dead_servers(retention):
             BuyIn.closed_at.is_(None)
         ).exists()
         deleted = session.query(GameServer).filter(
-            GameServer.last_seen <= time.time() - retention,
+            GameServer.last_seen <= _now(session) - retention,
             ~has_open_buy_in
         ).delete(synchronize_session=False)
         session.commit()
@@ -164,18 +211,19 @@ def take_seat(username, server_id):
     """Add new player seat if player not seated or update the existing one if
     game server not available and takeover expired."""
     with SessionLocal() as session:
+        now = _now(session)
         seat = session.get(Seat, username, with_for_update=True)
         if seat is not None:
             owner = session.get(GameServer, seat.server_id)
-            owner_alive = owner is not None and owner.last_seen >= time.time() - SEAT_TAKEOVER
+            owner_alive = owner is not None and owner.last_seen >= now - SEAT_TAKEOVER
             if seat.server_id != server_id and owner_alive:
                 return False
             seat.server_id = server_id
-            seat.since = time.time()
+            seat.since = now
             session.commit()
             return True
-        
-        session.add(Seat(username=username, server_id=server_id, since=time.time()))
+
+        session.add(Seat(username=username, server_id=server_id, since=now))
         try:
             session.commit()
         except:
@@ -203,7 +251,7 @@ def create_buy_in(username, server_id, buy_in):
         user.balance -= amount # reserves the buy in from the balance
         session.add(BuyIn(id=id, username=username, server_id=server_id,
                           initial=amount, remaining=amount,
-                          last_updated=time.time()))
+                          last_updated=_now(session)))
         try:
             session.commit()
         except:
@@ -223,7 +271,7 @@ def _settle(session, buy_in):
         update(User)
         .where(User.username == buy_in.username)
         .values(balance=User.balance + remaining))
-    now = time.time()
+    now = _now(session)
     buy_in.closed_at = now
     buy_in.last_updated = now
 
@@ -249,15 +297,16 @@ def close_buy_in(server_id, buy_in_ids):
 def close_abandoned_buy_ins(grace):
     """Settle open buy ins that no game server is holding any more"""
     with SessionLocal() as session:
+        now = _now(session)
         seat_held = session.query(Seat).filter(
             Seat.username == BuyIn.username,
             Seat.server_id == BuyIn.server_id).exists()
         server_alive = session.query(GameServer).filter(
             GameServer.id == BuyIn.server_id,
-            GameServer.last_seen >= time.time() - SEAT_TAKEOVER).exists()
+            GameServer.last_seen >= now - SEAT_TAKEOVER).exists()
         abandoned = session.query(BuyIn).filter(
             BuyIn.closed_at.is_(None),
-            BuyIn.last_updated < time.time() - grace,
+            BuyIn.last_updated < now - grace,
             or_(~seat_held, ~server_alive)).with_for_update().all()
 
         closed = [buy_in.id for buy_in in abandoned]
@@ -283,7 +332,7 @@ def apply_round(round_id, server_id, results):
         if session.get(AppliedRound, round_id) is not None:
             logger.info(f'Round {round_id} from server {server_id} already applied, skipping')
             return []
-        now = time.time()
+        now = _now(session)
         rejected = []
         for result in results:
             buy_in, reason = _get_buy_in(session, server_id, result)
@@ -325,5 +374,5 @@ def prune_old_rounds(max_age):
     """Drop applied rounds entries old enough that no retry can still happen"""
     with SessionLocal() as session:
         session.query(AppliedRound).filter(
-            AppliedRound.applied_at < time.time() - max_age).delete()
+            AppliedRound.applied_at < _now(session) - max_age).delete()
         session.commit()
