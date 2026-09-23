@@ -7,48 +7,78 @@ services:
       POSTGRES_DB: blackjack
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "blackjack"]
+      interval: 2s
+      retries: 15
 
-  central:
+  central_1:
     build: .
     restart: unless-stopped
     command: poetry run central
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/blackjack
+      SECRET_KEY: ${SECRET_KEY:-blackjack-demo-session-key}
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  central_2:
+    build: .
+    restart: unless-stopped
+    command: poetry run central
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/blackjack
+      SECRET_KEY: ${SECRET_KEY:-blackjack-demo-session-key}
+      PYTHONUNBUFFERED: 1
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  central_lb:
+    image: nginx:1.28
     ports:
       - "5002:5002"
-    environment:
-      - DATABASE_URL=postgresql://postgres:postgres@postgres:5432/blackjack
-      - SECRET_KEY=${SECRET_KEY:-blackjack-demo-session-key}
-      - PYTHONBUFFERED=1
-    env_file: .env
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
     depends_on:
-      - postgres
+      - central_1
+      - central_2
 
   game_server_1:
     build: .
+    restart: unless-stopped
     command: poetry run game_server
+    env_file: .env
     ports:
       - "8000:8000"
     environment:
       SERVER_HOST: "127.0.0.1"
       SERVER_PORT: "8000"
-      CENTRAL_URL: "http://central:5002"
-      CENTRAL_PUBLIC_URL: "http://localhost:5002"   # where "leave table" sends the browser
-    env_file: .env
+      CENTRAL_URLS: "http://central_1:5002,http://central_2:5002"
+      CENTRAL_PUBLIC_URL: "http://localhost:5002"
     depends_on:
-      - central
+      - central_1
+      - central_2
 
   game_server_2:
     build: .
+    restart: unless-stopped
     command: poetry run game_server
+    env_file: .env
     ports:
       - "8001:8001"
     environment:
       SERVER_HOST: "127.0.0.1"
       SERVER_PORT: "8001"
-      CENTRAL_URL: "http://central:5002"
-      CENTRAL_PUBLIC_URL: "http://localhost:5002"   # where "leave table" sends the browser
-    env_file: .env
+      CENTRAL_URLS: "http://central_1:5002,http://central_2:5002"
+      CENTRAL_PUBLIC_URL: "http://localhost:5002"
     depends_on:
-      - central
+      - central_1
+      - central_2
 
 volumes:
   postgres_data:
