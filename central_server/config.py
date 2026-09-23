@@ -33,4 +33,7 @@ DEAD_SERVERS_RETENTION = 60 * 60 * 3
 
 TRIMMER_INTERVAL = 120
 
+# how often the trimmer checks that the database answers
+DB_PROBE_INTERVAL = 5
+
 INITIAL_BALANCE = 1000
