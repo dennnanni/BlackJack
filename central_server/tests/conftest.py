@@ -1,6 +1,7 @@
 import os
 
 os.environ['SHARED_SECRET'] = 'test-secret'
+os.environ['SECRET_KEY'] = 'test-session-key'
 os.environ['DATABASE_URL'] = 'sqlite://'
 
 import pytest
