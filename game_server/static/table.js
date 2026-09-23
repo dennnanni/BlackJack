@@ -86,7 +86,16 @@ for (const button of document.querySelectorAll("#actions button")) {
     button.addEventListener("click", () => sendAction(button.dataset.action));
 }
 
-socket.on("connect", () => socket.emit("join"));
+socket.on("connect", () => {
+    $("connection-banner").hidden = true;
+    socket.emit("join");
+});
+
+// hide the controls so a click now can't become a late bet or action.
+socket.on("disconnect", () => {
+    $("connection-banner").hidden = false;
+    setPhase("waiting", "Connection lost — reconnecting…");
+});
 
 socket.on("joined", data => {
     setStatus(data.is_player ? `Seated at ${data.table_id}. Waiting for the round to start…`

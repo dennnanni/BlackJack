@@ -34,6 +34,10 @@
     </div>
 
     <div id="game-area" data-username="{{ username }}" data-balance="{{ balance }}">
+        <div id="connection-banner" class="zone banner" hidden>
+            ⚠ Connection to the table lost — reconnecting…
+        </div>
+
         <div id="lease-banner" class="zone banner" hidden>
             ⚠ Connection to the central server lost — no new rounds can start until it is
             back. You keep your seat and nothing is lost.
