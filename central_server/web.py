@@ -94,7 +94,8 @@ def register_post():
         return render_template('access.html', register=True, error=f'Username {username} is already taken')
 
     hashed_password, salt = auth.generate_hashed_password(password)
-    db.add_user(username, hashed_password, salt, INITIAL_BALANCE)
+    if not db.add_user(username, hashed_password, salt, INITIAL_BALANCE):
+        return render_template('access.html', register=True, error=f'Username {username} is already taken')
     return redirect('/login')
 
 
