@@ -5,40 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Blackjack</title>
-    <style>
-        body { font-family: Arial, sans-serif; padding: 20px; background: #1d3b2a; color: #f4f4f4; }
-        h1 { margin-top: 0; }
-        .card { display: inline-block; margin: 4px; padding: 10px 12px; border: 1px solid #ccc;
-                border-radius: 6px; background: #fff; color: #111; font-weight: bold; }
-        .zone { background: rgba(0,0,0,.25); border-radius: 10px; padding: 14px 18px; margin-bottom: 14px; }
-        .player { margin-bottom: 8px; }
-        .me { color: #ffd966; }
-        .turn { outline: 2px solid #ffd966; border-radius: 6px; padding: 4px 8px; }
-        #status { font-size: 1.1em; margin-bottom: 14px; }
-        #actions button, #bet-controls button, #bet-controls input, #sit-toggle { font-size: 1em; padding: 8px 14px; margin-right: 6px; }
-        button:disabled { opacity: .5; cursor: not-allowed; }
-        #actions { display: none; }
-        #bet-controls { display: none; }
-        #bet-timer { font-weight: bold; margin-right: 6px; }
-        #bet-timer.urgent { color: #ff8080; }
-        .total { display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 10px;
-                 background: rgba(255,255,255,.15); font-size: .9em; font-weight: bold; }
-        .total:empty { display: none; }
-        .total.bust { background: #a11; }
-        #log { font-size: .9em; max-height: 180px; overflow-y: auto; opacity: .85; }
-        #log div { border-bottom: 1px solid rgba(255,255,255,.1); padding: 2px 0; }
-        .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
-        button.danger { background: #a11; color: #fff; border: 1px solid #d33; border-radius: 6px;
-                        padding: 8px 14px; font-size: 1em; cursor: pointer; }
-        .backdrop { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.6);
-                    align-items: center; justify-content: center; padding: 20px; }
-        .backdrop.open { display: flex; }
-        .modal { background: #21402f; border: 1px solid #4a7a5d; border-radius: 10px;
-                 padding: 20px 24px; max-width: 460px; }
-        .modal h3 { margin-top: 0; }
-        .modal button { margin-right: 8px; font-size: 1em; padding: 8px 14px; }
-        .warn { color: #ffb3b3; font-weight: bold; }
-    </style>
+    <link rel="stylesheet" href="{{ url_for('static', filename='table.css') }}">
 </head>
 
 <body>
@@ -51,7 +18,7 @@
     {% else %}
     <div class="zone topbar">
         <span><strong class="me">{{ username }}</strong> — balance: $<span id="balance">{{ balance }}</span></span>
-        <button id="leave-button" class="danger" onclick="askLeave()">Leave table</button>
+        <button id="leave-button" class="danger">Leave table</button>
     </div>
 
     <div id="leave-modal" class="backdrop">
@@ -61,13 +28,13 @@
             <p>You will go back to the central server, where your balance of record is kept.</p>
             <form method="post" action="{{ url_for('game.leave') }}">
                 <button class="danger" type="submit">Yes, leave the table</button>
-                <button type="button" onclick="closeLeave()">Stay</button>
+                <button id="stay-button" type="button">Stay</button>
             </form>
         </div>
     </div>
 
-    <div id="game-area">
-        <div id="lease-banner" class="zone" style="display:none; border:1px solid #a33; color:#ffb3b3;">
+    <div id="game-area" data-username="{{ username }}" data-balance="{{ balance }}">
+        <div id="lease-banner" class="zone banner" hidden>
             ⚠ Connection to the central server lost — no new rounds can start until it is
             back. You keep your seat and nothing is lost.
         </div>
@@ -87,15 +54,15 @@
         <div class="zone" id="controls">
             <span id="bet-controls">
                 <input id="bet-amount" placeholder="Your bet" type="number" min="1">
-                <button id="bet-button" onclick="sendBet()">Place bet</button>
+                <button id="bet-button">Place bet</button>
                 <span id="bet-timer"></span>
             </span>
             <span id="actions">
-                <button onclick="sendAction('hit')">Hit</button>
-                <button onclick="sendAction('stand')">Stand</button>
-                <button id="double-button" onclick="sendAction('double')">Double down</button>
+                <button data-action="hit">Hit</button>
+                <button data-action="stand">Stand</button>
+                <button id="double-button" data-action="double">Double down</button>
             </span>
-            <button id="sit-toggle" onclick="toggleSit()">Sit out</button>
+            <button id="sit-toggle">Sit out</button>
         </div>
 
         <div class="zone">
@@ -105,383 +72,7 @@
     </div>
 
     <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
-    <script>
-        const me = "{{ username }}";
-        let balance = parseFloat("{{ balance }}");
-        let myBet = 0;
-        let sittingOut = false;
-        let countdownTimer = null;
-        let betTimer = null;
-        const socket = io();
-
-        const $ = id => document.getElementById(id);
-        function setStatus(text) { $("status").innerText = text; }
-        function log(text) {
-            const line = document.createElement("div");
-            line.innerText = text;
-            $("log").prepend(line);
-        }
-        function renderCards(cards) {
-            return cards.map(cardSpan).join("") || "—";
-        }
-        function cardSpan(c) {
-            return `<span class="card">${c}</span>`;
-        }
-        function showBetControls(show) {
-            $("bet-controls").style.display = show ? "inline" : "none";
-            if (show) $("bet-button").disabled = false;
-            else stopBetTimer();   // the timer only means something next to the controls
-        }
-        function showActions(show) {
-            $("actions").style.display = show ? "inline" : "none";
-            // Double down is only legal on the opening two cards.
-            if (show) $("double-button").style.display = "inline";
-        }
-
-        // --- Actions the player takes (these are what the buttons call) ---
-        function sendBet() {
-            const amount = parseFloat($("bet-amount").value);
-            if (!(amount > 0)) { setStatus("Enter a bet amount greater than 0."); return; }
-            if (amount > balance) { setStatus("You can't bet more than your balance."); return; }
-            $("bet-button").disabled = true;   // avoid double-submits; re-enabled next round
-            socket.emit("bet", { amount });
-        }
-        function sendAction(action) {
-            socket.emit("player_action", { action });
-        }
-        // Sitting out is a standing choice, not a per-round one: the table
-        // stops dealing you in (and stops waiting for you) until you sit in.
-        function toggleSit() {
-            socket.emit("sit_out", { sitting_out: !sittingOut });
-        }
-        // Leaving mid-round forfeits the stake, so say so before doing it.
-        function askLeave() {
-            $("leave-warning").innerHTML = myBet > 0
-                ? `<span class="warn">You have $${myBet} on this hand. Leaving now loses it,
-                   whatever the cards would have said.</span>
-                   The rest of your chips reach your balance when this round is over.`
-                : "You have nothing staked on this hand.";
-            $("leave-modal").classList.add("open");
-        }
-        function closeLeave() { $("leave-modal").classList.remove("open"); }
-
-        socket.on("connect", () => socket.emit("join"));
-
-        socket.on("joined", data => {
-            setStatus(data.is_player ? `Seated at ${data.table_id}. Waiting for the round to start…`
-                                     : `Watching ${data.table_id}: a round is in progress, you play the next one.`);
-        });
-
-        // A reconnect (page reload) lands here instead of "joined": the
-        // server sends back whatever state exists so the page doesn't just
-        // show blank zones until the next event happens to fire.
-        socket.on("resumed", data => {
-            balance = data.balance;
-            $("balance").innerText = balance.toFixed(2);
-            // A reload must not make the leave warning lie about the stake.
-            myBet = data.bet_amount || 0;
-            sittingOut = data.sitting_out;
-            $("sit-toggle").innerText = sittingOut ? "Sit in" : "Sit out";
-
-            if (!data.in_round) {
-                showBetControls(false);
-                showActions(false);
-                setStatus(sittingOut ? "You are sitting out. Press “Sit in” to play the next round."
-                                     : "Reconnected. Waiting for the next round…");
-                return;
-            }
-
-            setDealerCards(data.dealer_cards);
-            renderPlayers(data.hands);
-
-            if (data.your_turn) {
-                highlightTurn(me);
-                showActions(true);
-                $("double-button").style.display = data.hand.length > 2 ? "none" : "inline";
-                showBetControls(false);
-                setStatus("Your turn: hit, stand or double down.");
-            } else if (data.betting_open && data.bet_amount == null && !sittingOut) {
-                showActions(false);
-                showBetControls(true);
-                startBetTimer(data.bet_seconds_left);
-                setStatus("Place your bet to join this round — or sit it out and stake nothing.");
-            } else {
-                showActions(false);
-                showBetControls(false);
-                setStatus(data.bet_amount != null ? "Reconnected. Waiting for the round to continue…"
-                                                  : "Reconnected: watching this round.");
-            }
-        });
-
-        socket.on("game_starting", () => {
-            clearCountdown();
-            setStatus("Round starting…");
-            setDealerCards([]);
-            $("players-area").innerHTML = "—";
-            myBet = 0;
-        });
-
-        socket.on("place_bets", data => {
-            showActions(false);
-            if (sittingOut) {
-                setStatus("You are sitting out. Press “Sit in” to play the next round.");
-                showBetControls(false);
-                return;
-            }
-            setStatus("Place your bet to join this round — or sit it out and stake nothing.");
-            showBetControls(true);
-            startBetTimer(data.seconds);
-        });
-
-        socket.on("seat_state", data => {
-            sittingOut = data.sitting_out;
-            $("sit-toggle").innerText = sittingOut ? "Sit in" : "Sit out";
-            if (sittingOut) { showBetControls(false); showActions(false); }
-            if (data.applies_now) {
-                setStatus(sittingOut ? "Sitting out — the table will not wait for you."
-                                     : "You are in: betting on the next deal.");
-            } else {
-                setStatus(sittingOut ? "You will sit out from the next round; finish this one first."
-                                     : "You will play again from the next round.");
-            }
-        });
-
-        socket.on("table_idle", () => {
-            clearCountdown();
-            showBetControls(false);
-            showActions(false);
-            setStatus("Everyone at the table is sitting out. Press “Sit in” to start a round.");
-        });
-
-        socket.on("bet_confirmed", data => {
-            log(`${data.user} bet $${data.amount}`);
-            if (data.user === me) {
-                myBet = data.amount;
-                showBetControls(false);
-                setStatus("Bet placed. Waiting for the cards…");
-            }
-        });
-
-        // The server may no longer stake balances, so it froze the table
-        // rather than play rounds central cannot settle. Nobody is kicked.
-        socket.on("lease_expired", () => {
-            clearCountdown();
-            $("lease-banner").style.display = "";
-            setStatus("Paused: waiting for the central server.");
-            showBetControls(false);
-            showActions(false);
-        });
-
-        socket.on("lease_restored", () => {
-            $("lease-banner").style.display = "none";
-            setStatus("Central server is back — resuming play.");
-        });
-
-        socket.on("no_players_bet", () => {
-            setStatus("Nobody bet this round. Starting a new betting round…");
-            showBetControls(false);
-            showActions(false);
-        });
-
-        socket.on("initial_cards", data => {
-            renderPlayers(data.hands);
-            if (data.dealer_cards) setDealerCards(data.dealer_cards);
-            // Action buttons are governed by turn_started, not by the deal.
-        });
-
-        socket.on("turn_started", data => {
-            highlightTurn(data.user);
-            if (data.user === me) {
-                setStatus("Your turn: hit, stand or double down.");
-                showActions(true);
-            } else {
-                showActions(false);
-                setStatus(`Waiting for ${data.user} to play…`);
-            }
-        });
-
-        socket.on("card_drawn", data => {
-            log(`${data.user} drew ${data.card}`);
-            appendCard(data.user, data.card);
-            // After the first hit a hand has 3+ cards, so doubling is no longer legal.
-            if (data.user === me) $("double-button").style.display = "none";
-        });
-
-        socket.on("player_busted", data => {
-            log(`${data.user} busted!`);
-            if (data.user === me) { setStatus("Busted! Waiting for the round to finish…"); showActions(false); }
-        });
-
-        socket.on("player_left", data => {
-            log(`${data.user} left the table (stake forfeited)`);
-        });
-
-        socket.on("user_stood", data => {
-            log(`${data.user} stands`);
-            if (data.user === me) { setStatus("Standing. Waiting for your turn to end…"); showActions(false); }
-        });
-
-        socket.on("user_doubled", data => {
-            log(`${data.user} doubled down and drew ${data.card}`);
-            appendCard(data.user, data.card);
-            if (data.user === me) { setStatus("Doubled down. Waiting for the round to finish…"); showActions(false); }
-        });
-
-        socket.on("player_auto_stand", data => {
-            log(`${data.user} took too long: automatic stand`);
-            if (data.user === me) { setStatus("Time's up: automatic stand."); showActions(false); }
-        });
-
-        socket.on("dealer_turn", () => {
-            clearTurnHighlight();
-            // Not cleared: the upcard has been on the table since the deal, and
-            // each dealer_card redraws the whole hand with the new card in it.
-            setStatus("Dealer's turn — drawing…");
-        });
-
-        socket.on("dealer_card", data => {
-            log(`Dealer drew ${data.card}`);
-            setDealerCards(data.cards);
-        });
-
-        socket.on("dealer_done", data => {
-            clearTurnHighlight();
-            setDealerCards(data.cards);
-            setStatus("Dealer stands. Settling the round…");
-        });
-
-        socket.on("round_results", data => {
-            showActions(false);
-            showBetControls(false);
-            clearTurnHighlight();
-            let myOutcome = null;
-            for (const res of data.results) {
-                const outcome = res.balance_difference > 0 ? `won $${res.balance_difference}`
-                              : res.balance_difference < 0 ? `lost $${-res.balance_difference}`
-                              : "pushed (tie)";
-                log(`${res.username} ${outcome}`);
-                if (res.username === me) {
-                    balance += res.balance_difference;
-                    $("balance").innerText = balance.toFixed(2);
-                    myOutcome = outcome;
-                }
-            }
-            myBet = 0;   // nothing is staked between rounds
-            const base = myOutcome ? `Round over: you ${myOutcome}.` : "Round over.";
-            startCountdown(data.next_round_in || 0, base);
-        });
-
-        // The buy-in behind this session has been settled, so this page can
-        // no longer seat us: say so, then leave for central, which can open
-        // a new one.
-        socket.on("seat_closed", data => {
-            clearCountdown();
-            showBetControls(false);
-            showActions(false);
-            setStatus(data.message);
-            setTimeout(() => document.querySelector("#leave-modal form").submit(), 3000);
-        });
-
-        socket.on("error", data => log(`Error: ${data.message}`));
-
-        // --- small DOM helpers ---
-        function appendCard(user, card) {
-            const hand = $(`hand-${user}`);
-            const span = hand && hand.querySelector(".hand");
-            if (!span) return;
-            span.innerHTML += cardSpan(card);
-            showTotal(span, hand.querySelector(".total"));
-        }
-        function renderPlayers(hands) {
-            $("players-area").innerHTML = "";
-            for (const user in hands) {
-                const div = document.createElement("div");
-                div.className = "player" + (user === me ? " me" : "");
-                div.innerHTML = `<strong>${user}</strong>: <span class="hand">${renderCards(hands[user])}</span><span class="total"></span>`;
-                div.id = `hand-${user}`;
-                $("players-area").appendChild(div);
-                showTotal(div.querySelector(".hand"), div.querySelector(".total"));
-            }
-        }
-        function setDealerCards(cards) {
-            $("dealer-cards").innerHTML = renderCards(cards);
-            showTotal($("dealer-cards"), $("dealer-total"));
-        }
-        // Mirrors Hand.get_hand_value on the server: aces count 11, then drop
-        // to 1 one at a time while the hand busts. A hand still counting an
-        // ace as 11 is "soft", since a hit cannot bust it.
-        function handValue(cards) {
-            let total = 0, aces = 0;
-            for (const card of cards) {
-                const rank = card.slice(0, -1);   // "10♠" -> "10"
-                if (rank === "A") { total += 11; aces += 1; }
-                else total += ["J", "Q", "K"].includes(rank) ? 10 : Number(rank);
-            }
-            while (total > 21 && aces) { total -= 10; aces -= 1; }
-            return { total, soft: aces > 0 };
-        }
-        function showTotal(cardsEl, totalEl) {
-            const cards = [...cardsEl.querySelectorAll(".card")].map(el => el.textContent);
-            const { total, soft } = handValue(cards);
-            totalEl.classList.toggle("bust", total > 21);
-            totalEl.innerText = !cards.length ? ""
-                              : total > 21 ? `${total} bust`
-                              : total === 21 && cards.length === 2 ? "Blackjack"
-                              : soft ? `soft ${total}` : `${total}`;
-        }
-        function highlightTurn(user) {
-            clearTurnHighlight();
-            const hand = $(`hand-${user}`);
-            if (hand) hand.classList.add("turn");
-        }
-        function clearTurnHighlight() {
-            document.querySelectorAll(".player.turn").forEach(el => el.classList.remove("turn"));
-        }
-        function clearCountdown() {
-            if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
-        }
-        // Counts down to a local deadline rather than decrementing a counter,
-        // so a background tab whose intervals get throttled still shows the
-        // right time.
-        function startBetTimer(seconds) {
-            stopBetTimer();
-            if (!(seconds > 0)) return;
-            const deadline = Date.now() + seconds * 1000;
-            const render = () => {
-                const left = Math.ceil((deadline - Date.now()) / 1000);
-                if (left <= 0) {
-                    // The server closed the window before our deadline (the
-                    // message took time to get here): a bet now is refused.
-                    showBetControls(false);
-                    setStatus("Betting closed: you are watching this round.");
-                    return;
-                }
-                $("bet-timer").innerText = `${left}s left to bet`;
-                $("bet-timer").classList.toggle("urgent", left <= 5);
-            };
-            render();
-            betTimer = setInterval(render, 250);
-        }
-        function stopBetTimer() {
-            if (betTimer) { clearInterval(betTimer); betTimer = null; }
-            $("bet-timer").innerText = "";
-            $("bet-timer").classList.remove("urgent");
-        }
-        function startCountdown(seconds, base) {
-            clearCountdown();
-            let left = Math.round(seconds);
-            const render = () => setStatus(left > 0 ? `${base} Next round in ${left}s…`
-                                                    : `${base} Next round starting…`);
-            render();
-            if (left > 0) {
-                countdownTimer = setInterval(() => {
-                    left -= 1;
-                    if (left <= 0) clearCountdown();
-                    render();
-                }, 1000);
-            }
-        }
-    </script>
+    <script src="{{ url_for('static', filename='table.js') }}"></script>
     {% endif %}
 </body>
 

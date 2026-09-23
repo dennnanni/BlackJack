@@ -1,0 +1,156 @@
+:root {
+    --bg-table: #1d3b2a;
+    --bg-zone: rgba(0, 0, 0, 0.25);
+    --bg-modal: #21402f;
+    --border-modal: #4a7a5d;
+    --text-primary: #f4f4f4;
+    --text-warning: #ffb3b3;
+    --text-urgent: #ff8080;
+    --accent: #ffd966;
+    --danger: #a11;
+    --danger-border: #d33;
+}
+
+/* Page */
+
+body {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+    background: var(--bg-table);
+    color: var(--text-primary);
+}
+
+h1 { margin-top: 0; }
+
+.zone {
+    background: var(--bg-zone);
+    border-radius: 8px;
+    padding: 14px 18px;
+    margin-bottom: 14px;
+}
+
+.topbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.me { color: var(--accent); }
+
+/* Status and warnings */
+
+#status { font-size: 1.1em; }
+
+.banner {
+    border: 1px solid var(--danger-border);
+    color: var(--text-warning);
+}
+
+.warn {
+    color: var(--text-warning);
+    font-weight: bold;
+}
+
+/* Cards and hands */
+
+.card {
+    display: inline-block;
+    margin: 2px 4px;
+    padding: 8px 10px;
+    border-radius: 4px;
+    background: #fff;
+    color: #111;
+    font-weight: bold;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+}
+
+.player { margin-bottom: 8px; }
+
+.player.turn {
+    outline: 2px solid var(--accent);
+    border-radius: 4px;
+    padding: 4px;
+}
+
+.total {
+    display: inline-block;
+    margin-left: 8px;
+    padding: 2px 8px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.15);
+    font-size: 0.85em;
+    font-weight: 600;
+}
+.total:empty { display: none; }
+.total.bust { background: var(--danger); }
+
+/* Controls */
+
+/* Hidden until the game asks for them: table.js shows them in setPhase. */
+#bet-controls,
+#actions { display: none; }
+
+button,
+#bet-amount {
+    font-size: 0.95em;
+    padding: 8px 14px;
+    margin-right: 6px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+}
+
+button { cursor: pointer; }
+
+button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+button.danger {
+    background: var(--danger);
+    border-color: var(--danger-border);
+    color: #fff;
+}
+
+#bet-timer { font-weight: bold; }
+#bet-timer.urgent { color: var(--text-urgent); }
+
+/* Table log */
+
+#log {
+    max-height: 160px;
+    overflow-y: auto;
+    font-size: 0.85em;
+    opacity: 0.9;
+}
+
+#log div {
+    padding: 3px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+/* Leave dialog */
+
+.backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+    background: rgba(0, 0, 0, 0.65);
+}
+.backdrop.open { display: flex; }
+
+.modal {
+    max-width: 420px;
+    padding: 20px 24px;
+    border: 1px solid var(--border-modal);
+    border-radius: 8px;
+    background: var(--bg-modal);
+    color: var(--text-primary);
+}
+
+.modal h3 { margin-top: 0; }
