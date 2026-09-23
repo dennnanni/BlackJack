@@ -10,6 +10,7 @@ services:
 
   central:
     build: .
+    restart: unless-stopped
     command: poetry run central
     ports:
       - "5002:5002"
