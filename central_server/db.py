@@ -26,6 +26,10 @@ TRIMMER_LOCK = 2
 
 IS_POSTGRES = engine.dialect.name == 'postgresql'
 
+
+class ServerFull(Exception):
+    """The game server has no free seat left"""
+
 class User(Base):
     __tablename__ = 'user'
 
@@ -42,7 +46,6 @@ class GameServer(Base):
     host = Column(String, nullable=False)
     port = Column(Integer, nullable=False)
     capacity = Column(Integer, nullable=False, default=10)
-    load = Column(Integer, nullable=False, default=0)
     last_seen = Column(Float, nullable=False, default=0.0)
 
 class Seat(Base):
@@ -166,14 +169,15 @@ def resurrect_server(server_id, host, port, capacity):
 
 
 def update_heartbeat(server_id, players):
-    """Record a heartbeat and update seated players"""
+    """Record a heartbeat and release the seats of players who left"""
     with SessionLocal() as session:
-        server = session.get(GameServer, server_id)
+        # lock the server before its seats, must be in the same order as take_seat,
+        # otherwise the two can deadlock
+        server = session.get(GameServer, server_id, with_for_update=True)
         if server is None:
             return False
 
         now = _now(session)
-        server.load = len(players)
         server.last_seen = now
         session.query(Seat).filter(
             Seat.server_id == server_id,
@@ -185,12 +189,19 @@ def update_heartbeat(server_id, players):
         return True
 
 
+def _seat_count():
+    return (select(func.count()).select_from(Seat)
+            .where(Seat.server_id == GameServer.id)
+            .correlate(GameServer).scalar_subquery())
+
+
 def get_alive_servers():
     with SessionLocal() as session:
+        seats = _seat_count()
         return session.query(GameServer).filter(
             GameServer.last_seen >= _now(session) - HEARTBEAT,
-            GameServer.load < GameServer.capacity
-        ).all()
+            seats < GameServer.capacity
+        ).order_by(seats).all()
 
 
 def remove_dead_servers(retention):
@@ -209,26 +220,41 @@ def remove_dead_servers(retention):
 
 def take_seat(username, server_id):
     """Add new player seat if player not seated or update the existing one if
-    game server not available and takeover expired."""
+    game server not available and takeover expired. Enforces the capacity check."""
+    already_seated = ('You are already seated at a table: leave it '
+                      '(or wait a few seconds) before playing again')
     with SessionLocal() as session:
         now = _now(session)
+        server = session.get(GameServer, server_id, with_for_update=True)
+        if server is None:
+            raise ValueError('Unknown game server')
+
         seat = session.get(Seat, username, with_for_update=True)
-        if seat is not None:
-            owner = session.get(GameServer, seat.server_id)
-            owner_alive = owner is not None and owner.last_seen >= now - SEAT_TAKEOVER
-            if seat.server_id != server_id and owner_alive:
-                return False
-            seat.server_id = server_id
+        if seat is not None and seat.server_id == server_id:
             seat.since = now
             session.commit()
-            return True
+            return
 
-        session.add(Seat(username=username, server_id=server_id, since=now))
+        if seat is not None:
+            owner = session.get(GameServer, seat.server_id)
+            if owner is not None and owner.last_seen >= now - SEAT_TAKEOVER:
+                raise ValueError(already_seated)
+
+        taken = session.query(Seat).filter(Seat.server_id == server_id).count()
+        if taken >= server.capacity:
+            raise ServerFull()
+
+        if seat is None:
+            session.add(Seat(username=username, server_id=server_id, since=now))
+        else:
+            seat.server_id = server_id
+            seat.since = now
         try:
             session.commit()
-        except:
-            return False
-        return True
+        except IntegrityError:
+            # a concurrent dispatch seated the same player first
+            raise ValueError(already_seated)
+
 
 def create_buy_in(username, server_id, buy_in):
     """Creates the buy in row reserving an amount from the user balance"""

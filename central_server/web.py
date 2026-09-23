@@ -23,19 +23,6 @@ class UserSession(UserMixin):
         return self.username
 
 
-@dataclass
-class ServerLoad:
-    """A registered game server together with how many players it holds."""
-    id: int
-    host: str
-    port: int
-    connected_users: int
-    max_users: int
-
-    def get_url(self):
-        return f'http://{self.host}:{self.port}'
-    
-
 def _render_home(user, error=None):
     return render_template('home.html', username=user.username,
                            balance=f'{user.balance:.2f}', error=error)
@@ -124,18 +111,25 @@ def play():
     if not available_servers:
         return _render_home(user, error='No game server is available right now, try again later')
 
-    chosen_server = min(available_servers, key=lambda s: s.load)
-    try:
-        buy_in_id, reserved = db.create_buy_in(user.username, chosen_server.id, buy_in)
-    except ValueError as e:
-        return _render_home(user, error=str(e))
+    # we try different servers if something goes wrong with one
+    for server in available_servers:
+        try:
+            buy_in_id, reserved = db.create_buy_in(user.username, server.id, buy_in)
+        except ValueError as e:
+            return _render_home(user, error=str(e))
 
-    if not db.take_seat(user.username, chosen_server.id):
-        # give the money back to the user if it cannot take a seat
-        db.close_buy_in(chosen_server.id, [buy_in_id])
-        return _render_home(user, error="You are already seated at a table: leave it "
-                                        "(or wait a few seconds) before playing again")
+        try:
+            db.take_seat(user.username, server.id)
+        except db.ServerFull:
+            db.close_buy_in(server.id, [buy_in_id])
+            continue
+        except ValueError as e:
+            # give the money back to the user if it cannot take a seat
+            db.close_buy_in(server.id, [buy_in_id])
+            return _render_home(user, error=str(e))
 
-    token = auth.create_join_token(user.username, chosen_server.id, buy_in_id, reserved)
-    join_url = f'http://{chosen_server.host}:{chosen_server.port}/join'
-    return render_template('dispatch.html', join_url=join_url, token=token)
+        token = auth.create_join_token(user.username, server.id, buy_in_id, reserved)
+        join_url = f'http://{server.host}:{server.port}/join'
+        return render_template('dispatch.html', join_url=join_url, token=token)
+
+    return _render_home(user, error='All game servers are full right now, try again later')
