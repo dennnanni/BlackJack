@@ -8,13 +8,13 @@ load_dotenv()
 SERVER_HOST = os.getenv('SERVER_HOST', '127.0.0.1')
 SERVER_PORT = int(os.getenv('SERVER_PORT', '8000'))
 
-# Base url only, no path: central_client adds its own.
-CENTRAL_URL = os.getenv('CENTRAL_URL', 'http://localhost:5002')
+# Comma separated list of central replicas.
+CENTRAL_URLS = os.getenv('CENTRAL_URLS', 'http://localhost:5002').split(',')
 
 # How many players we'll seat. Central uses it to decide where to send people.
 CAPACITY = int(os.getenv('CAPACITY', '10'))
 
-# In compose CENTRAL_URL is a docker hostname the browser can't resolve.
+# In compose CENTRAL_URLS are docker hostnames the browser can't resolve.
 CENTRAL_PUBLIC_URL = os.getenv('CENTRAL_PUBLIC_URL', CENTRAL_URLS[0])
 
 HEARTBEAT_INTERVAL = int(os.getenv('HEARTBEAT_INTERVAL', '5'))
