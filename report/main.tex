@@ -161,7 +161,7 @@ Interactions with the game servers are mildly frequent, with an average of three
 
 Since the majority of the users' interactions happen towards the game servers, distribution is useful to decouple the games from the coordination, scale the games capacity on request and increase fault-tolerance of the games.
 However, the central server represents a single point of failure of the system.
-The only human role in the system is the player, as the servers are autonomous actors.
+The only human role in the system is the player, as the servers are autonomous actors that interact with the central server.
 
 
 % \NOTE{Instructions below}
@@ -218,7 +218,7 @@ The only human role in the system is the player, as the servers are autonomous a
 \begin{enumerate}
     \item The game servers should accept only logged users dispatched to them from the central server
     \item The game servers should enforce a time window for betting and taking actions for each player
-    \item Resurrected game servers should be able to re-register and be reinstated with the same id, unless the id is expired
+    \item Resurrected game servers should be able to re-register and be reinstated with the same id
     \item The central server should balance the load when dispatching to game servers
     \item The central server should accept registrations only from legitimate game servers
     \item The central server should accept registration of new game servers at runtime
@@ -274,6 +274,45 @@ The only human role in the system is the player, as the servers are autonomous a
 
 \subsection{Relevant Distributed System Features}
 \label{ds-features}
+
+\begin{itemize}
+    \item transparency: ideally the user should be aware that there is something wrong with the system, the idea is to prevent the user from playing on corrupted servers, and potentially lose money.
+    The system shows which game server the user is connected to, while it hides distribution and replication of the central server, because it is better to have single access point.
+    User perspective: distribution and replication of the central is hidden, while the user is aware of different game servers (from the URL) but it is not explicitly told about it.
+    Servers perspective: the replications is not hidden, the servers have the list of centrals to contact in case of failures.
+    Failure transparency depends on the phase of the game: during the round, the user is not aware of underlying issues while at the end of it, if the connection to central is lost, the user is warned and prevented from playing again.
+    Distribution practices are not hidden: eventual consistency on balance of made explicit, so that the user is informed about why the balance may look wrong for a period.
+    \item fault tolerance and dependability: if the game server fails, the game cannot physically proceed and cannot be resumed, so the user is warned that the server is not responding. If the server fails mid round, no money is lost. If the server fails after the end of a round, the results would be safely stored and sent to the central server as soon as possible. If the central server fails or there is a partition, the game server ends the current turn immediately or waits for its finishing, warns the user of the issues in the systems and avoids starting new rounds.
+    The central server is replicated and handles rounds and money in a concurrent-safe way. If a replica fails, the game server automatically retries the post of results to another one. Since there is the round ledger, results will be applied exacly once regardless.
+    Money integrity is of paramount importance, and corruption must be avoided. For this reason, rounds are suspended if no central server can be reached, to preserve the system from inconsistencies. Buy ins are designed to prevent the user from playing or losing more than a certain amount and are updated promptly at the end of each round.
+    On failures, the deployment restarts the failed containers immediately.
+    Unapplied Results ledger is used as audit trail to understand what is going wrong.
+    Consistency over availability for money.
+    Postgres DB is the SPOF.
+    \NOTE{Add info about the timers in the system?}
+    \item scalability: in a real case scenario, the system load is expected to grow. To handle increasing loads, more replicas of the central server and more game servers can be deployed, balancing the load between the servers. The SPOF of the system are the database, which is currently not replicated, and the Nginx proxy, but this is a lightweight service than can be restarted very quickly upon failures and it's a SPOF only client side.
+    The scalability is limited for the central \NOTEside{maybe this we can fix}
+    \item security and trust: the authorization in the authentication and authorization in the systems is generally implemented with JWT tokens. The tokens are signed with a secret, shared between the central servers and the game servers. The knowledge of this secret is what authenticates the entities. Authorization for servers is implemented presenting the token in each request.
+    User authentication is implemented with a login and authorization is implemented by providing them with a token, signed by the central server, that is validated by the game servers and carries the id of the server it is authenticating to. The two tokens are also told apart by the \texttt{typ} field in the token.
+    The token is the authorization mechanism, however the connection is not secured via a SSL/TSL certificate, therefore the system is prone to replay attacks, although the window is bounded by the token expiry, and buy in sits a player only once. In a real world scenario, the connection should be secured so avoid eavesdropping and hijacking.
+    The central server doesn't fully trust the game server, and performs checks on the buy in values and caps losses and wins if they exceed the buy in. Identity and money come from the token, never from the client.
+    Symmetric keys are used and are shared.
+    \item resource sharing: central server replicas need to access the shared database. In this case, coordination is necessary to handle race conditions in the updates. The coordination is implemented through locks on the database.
+    Player seat is reserved from a game server and may be contended by concurrent dispatches. The player balance is divided into buy ins and then reconciliated. The reconciliation happens idempotently, like the result application.
+    Central server replicas share the same concept of time as they use the shared DB one. Replication of the DB would also complicate the time consistency.
+    \item opennes, interoperability, heterogeneity: the systems is self contained, the interactions are mainly inside the system. It is important that the APIs are aligned between the central and the game server. Alignment is enforced at data level by the shared interface that is imported by both types of servers.
+    Communication happens with REST API and JSON data format between the servers, while WebSockets are used to communicate to the browser.
+    \item evolvability, maintainability: the system could need to be further expanded by introducing database replicas, new consistency mechanisms.
+    Updates to the servers require a restart, and there are no mechanism to safely shutdown the game servers, the round is interruped and bets are voided but money are not lost\NOTEside{this we can fix too}.
+    The system is configurable with .env variables.
+    Pytests ensure basic mechanisms are enforced.
+    The game servers register to the central, and they know the central servers by configuration, no service discovery, therefore differences in centrals deployment require reconfiguration of game servers.
+    \item performance, computation: the interactions with the system are limited per user, the system load depends on how many users are connected and the number of game servers. Rounds posts are parallel operations, that are handled at database level.
+    There are no strict response time constraints, the communication between the servers is asynchronous. The outbox of game servers decouples the end of a round from the network. JSON payloads are small, no bandwith issues. Game servers are multithread, and there is one thread per table.
+    \item open-source stack, no licences. single-machine Docker deployment. resource usage not minimised explicitly but components are light. in a real deployment cost grows with game servers, which can follow demand (link to scalability)
+\end{itemize}
+
+\NOTE{The following is the template}
 
 Motivate which distributed system features are relevant for your project, and which are not.
 %
@@ -335,6 +374,8 @@ Motivate which distributed system features are relevant for your project, and wh
     \item Is minimizing resource usage important?
   \end{itemize}
 \end{itemize}
+
+\NOTE{Not touched from here}
 
 \section{Design}\label{design}
 
