@@ -2,17 +2,21 @@ import sys
 import threading
 import time
 from http import HTTPStatus
+from uuid import uuid4
 
 from flask import Flask
 from flask_socketio import SocketIO
 
 from game_server.central_client import client
-from game_server.config import (HEARTBEAT_INTERVAL, OUTBOX_PATH, SERVER_HOST,
-                                SERVER_PORT)
+from game_server.config import (HEARTBEAT_INTERVAL, OUTBOX_PATH, SECRET_KEY,
+                                SERVER_HOST, SERVER_PORT)
 from game_server.outbox import Outbox
 
 socketio = SocketIO()
 outbox = Outbox(OUTBOX_PATH)
+
+# Changes on every start. A restart loses every table
+BOOT_ID = uuid4().hex
 
 REGISTRATION_ATTEMPTS = 5
 REGISTRATION_RETRY_SECONDS = 2
@@ -89,7 +93,8 @@ def _sender_loop():
 
 def create_app():
     app = Flask(__name__)
-    app.config['SECRET_KEY'] = 'secret!'
+    app.config['SECRET_KEY'] = SECRET_KEY
+    app.config['SESSION_COOKIE_NAME'] = f'game_session_{SERVER_PORT}'
 
     from game_server.join import game_bp
     app.register_blueprint(game_bp)
