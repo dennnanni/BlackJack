@@ -63,7 +63,7 @@ class Outbox:
             conn.execute('DELETE FROM pending WHERE round_id = ?', (round_id,))
 
     def seat(self, buy_in_id):
-        """A player sat down with this buy-in."""
+        """A player joined with this buy-in: we hold it until they leave."""
         with self._connection() as conn:
             conn.execute('INSERT OR IGNORE INTO seated VALUES (?, ?)',
                          (buy_in_id, time.time()))

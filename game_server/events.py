@@ -3,7 +3,7 @@ import time
 from flask import session
 from flask_socketio import emit, join_room
 
-from game_server.app import outbox
+from game_server.app import BOOT_ID, outbox
 from game_server.game.model import Hand, TableManager, User
 from game_server.loop import GameLoop
 
@@ -32,10 +32,14 @@ def _room(table):
     return f"table-{table.id}"
 
 
-def can_take_seat(buy_in_id, join_exp):
-    """Whether a session may still sit down: its buy-in has not seated anyone
-    yet and the join token that brought it has not expired."""
+def can_take_seat(buy_in_id, join_exp, boot_id):
+    """Whether a session may still sit down: it was opened by this very run
+    of this server, its buy-in has not seated anyone yet and the join token
+    that brought it has not expired. Every game server signs sessions with the
+    same key, so without the boot check a cookie from another server, or from
+    before a restart whose buy-ins are already closed, would be valid here."""
     return (buy_in_id is not None and buy_in_id not in seated_buy_ins
+            and boot_id == BOOT_ID
             and time.time() <= join_exp)
 
 
@@ -140,12 +144,11 @@ def register_event_handlers(socketio):
         # A new seat needs a buy-in that has not seated anyone yet: once its
         # player has left, this session must go back to central for another.
         buy_in_id = session.get('buy_in_id')
-        if not can_take_seat(buy_in_id, session.get('join_exp', 0)):
+        if not can_take_seat(buy_in_id, session.get('join_exp', 0), session.get('boot_id')):
             emit('seat_closed', {'message': 'Your seat at this table is over: '
                                             'back to the central server to play again'})
             return
         seated_buy_ins.add(buy_in_id)
-        outbox.seat(buy_in_id)
 
         user = User(username, session['balance'], buy_in_id)
         user_map[username] = user

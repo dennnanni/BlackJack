@@ -5,6 +5,7 @@ import jwt
 from flask import (Blueprint, jsonify, redirect, render_template, request,
                    session, url_for)
 
+from game_server.app import BOOT_ID, outbox
 from game_server.central_client import client
 from game_server.config import CENTRAL_PUBLIC_URL, SHARED_SECRET
 from shared.messages import BUY_IN, BUY_IN_ID, TYP, TYP_JOIN
@@ -50,7 +51,8 @@ def index():
 
     from game_server.events import can_take_seat, user_map   # circular at import time
     user = user_map.get(username)
-    if user is None and not can_take_seat(session.get('buy_in_id'), session.get('join_exp', 0)):
+    if user is None and not can_take_seat(session.get('buy_in_id'), session.get('join_exp', 0),
+                                          session.get('boot_id')):
         # Not seated and the buy-in cannot seat them any more: it has been
         # settled, and only central can open a new one.
         session.clear()
@@ -93,5 +95,9 @@ def join():
     session['buy_in_id'] = payload[BUY_IN_ID]
     session['balance'] = float(payload[BUY_IN])
     session['join_exp'] = payload['exp']
+    session['boot_id'] = BOOT_ID
     session.permanent = True
+    # Held from now on, not from when the socket sits down: if we crash in
+    # between, the restart still has to close this buy-in.
+    outbox.seat(payload[BUY_IN_ID])
     return redirect(url_for('game.index'))
