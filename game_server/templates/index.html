@@ -38,6 +38,13 @@
             ⚠ Connection to the table lost — reconnecting…
         </div>
 
+        <div id="seat-closed-banner" class="zone banner" hidden>
+            <form id="seat-closed-form" method="post" action="{{ url_for('game.leave') }}">
+                ⚠ <span id="seat-closed-text"></span>
+                <button class="danger" type="submit">Leave now</button>
+            </form>
+        </div>
+
         <div id="lease-banner" class="zone banner" hidden>
             ⚠ Connection to the central server lost — no new rounds can start until it is
             back. You keep your seat and nothing is lost.

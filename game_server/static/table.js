@@ -7,6 +7,7 @@ let timer = null;
 const socket = io();
 
 const SITTING_OUT_STATUS = "You are sitting out. Press “Sit in” to play the next round.";
+const SEAT_CLOSED_SECONDS = 10;
 
 const $ = id => document.getElementById(id);
 function setStatus(text) { $("status").innerText = text; }
@@ -254,11 +255,18 @@ socket.on("round_results", data => {
                       () => setStatus(`${base} Next round starting…`));
 });
 
-// The buy-in behind this session has been settled, so this page can
-// no longer seat us
+// This session can no longer take a seat here: its buy-in already seated
+// or its join token has expired, or it was opened before a restart.
 socket.on("seat_closed", data => {
+    if (!$("seat-closed-banner").hidden) return;   // a reconnect sent it again
     setPhase("waiting", data.message);
-    setTimeout(() => document.querySelector("#leave-modal form").submit(), 3000);
+    $("seat-closed-banner").hidden = false;
+    const form = $("seat-closed-form");
+    const id = countdown(SEAT_CLOSED_SECONDS,
+                         left => $("seat-closed-text").innerText =
+                             `${data.message}. Leaving in ${left}s…`,
+                         () => form.submit());
+    form.addEventListener("submit", () => clearInterval(id));
 });
 
 socket.on("error", data => log(`Error: ${data.message}`));
