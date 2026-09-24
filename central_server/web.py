@@ -3,7 +3,7 @@ game server. Plain HTTP only: the central server has no Socket.IO.
 """
 from dataclasses import dataclass
 
-from flask import (Blueprint, redirect, render_template, request, session)
+from flask import (Blueprint, jsonify, redirect, render_template, request)
 from flask_login import (UserMixin, current_user, login_required, login_user, logout_user)
 
 from central_server import auth, db
@@ -51,6 +51,17 @@ def home(username):
         logout_user()
         return redirect('/login')
     return _render_home(user)
+
+
+@web_bp.route('/balance')
+@login_required
+def balance():
+    """Polled by the home page to keep the balance up to date"""
+    user = db.get_user(current_user.username)
+    if user is None:
+        logout_user()
+        return jsonify({'error': 'Unknown user'}), 401
+    return jsonify({'balance': f'{user.balance:.2f}'})
 
 
 @web_bp.route('/login', methods=['POST'])

@@ -28,7 +28,7 @@
             <div class="col-md-6 text-center">
                 <div class="card bg-secondary text-white shadow rounded-4 p-4">
                     <h2 class="mb-3">Hello, {{ username }}!</h2>
-                    <h4 class="mb-4">Balance: ${{ balance }}
+                    <h4 class="mb-4">Balance: $<span id="balance">{{ balance }}</span>
                         <span class="text-white-50" data-bs-toggle="tooltip"
                               title="Money you are not playing with right now. What you buy in with is held at the table and comes back here when you get up. The balance may take a few minutes to return to its full amount.">&#9432;</span>
                     </h4>
@@ -66,13 +66,40 @@
 
         (function () {
             const field = document.getElementById('buy_in');
-            const balance = parseFloat(field.max);
             document.querySelectorAll('[data-fraction]').forEach(function (button) {
                 button.addEventListener('click', function () {
-                    const amount = Math.floor(balance * parseFloat(button.dataset.fraction));
+                    const amount = Math.floor(parseFloat(field.max) * parseFloat(button.dataset.fraction));
                     field.value = String(amount);
                 });
             });
+
+            const POLL_INTERVAL = 3000; // ms
+
+            function showBalance(balance) {
+                // buy in value adapts to the balance unless custom value is provided
+                if (field.value === field.max || parseFloat(field.value) > parseFloat(balance)) {
+                    field.value = balance;
+                }
+                field.max = balance;
+                document.getElementById('balance').textContent = balance;
+            }
+
+            async function poll() {
+                // avoid requests in background
+                if (!document.hidden) {
+                    try {
+                        const response = await fetch('/balance');
+                        if (response.ok && !response.redirected) {
+                            showBalance((await response.json()).balance);
+                        }
+                    } catch (e) {
+                        // central unreachable
+                    }
+                }
+                // the next request starts only after this one is done
+                setTimeout(poll, POLL_INTERVAL);
+            }
+            setTimeout(poll, POLL_INTERVAL);
         })();
     </script>
 </body>
