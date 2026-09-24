@@ -145,8 +145,8 @@ def register_event_handlers(socketio):
         # player has left, this session must go back to central for another.
         buy_in_id = session.get('buy_in_id')
         if not can_take_seat(buy_in_id, session.get('join_exp', 0), session.get('boot_id')):
-            emit('seat_closed', {'message': 'Your seat at this table is over: '
-                                            'back to the central server to play again'})
+            emit('seat_refused', {'message': 'Your seat at this table is over: '
+                                             'back to the central server to play again'})
             return
         seated_buy_ins.add(buy_in_id)
 

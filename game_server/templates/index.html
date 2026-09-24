@@ -38,9 +38,9 @@
             ⚠ Connection to the table lost — reconnecting…
         </div>
 
-        <div id="seat-closed-banner" class="zone banner" hidden>
-            <form id="seat-closed-form" method="post" action="{{ url_for('game.leave') }}">
-                ⚠ <span id="seat-closed-text"></span>
+        <div id="seat-refused-banner" class="zone banner" hidden>
+            <form id="seat-refused-form" method="post" action="{{ url_for('game.leave') }}">
+                ⚠ <span id="seat-refused-text"></span>
                 <button class="danger" type="submit">Leave now</button>
             </form>
         </div>
