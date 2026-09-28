@@ -2,8 +2,8 @@ import time
 from threading import Thread, Event
 from uuid import uuid4
 from game_server.game.model import Deck, Game, Hand
-from game_server.app import closing, outbox, socketio
 from game_server.central_client import client
+from game_server.runtime import closing, outbox, socketio
 
 BET_WINDOW_SECONDS = 35
 TURN_WINDOW_SECONDS = 30

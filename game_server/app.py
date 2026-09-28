@@ -2,25 +2,15 @@ import sys
 import threading
 import time
 from http import HTTPStatus
-from uuid import uuid4
 
 from flask import Flask
-from flask_socketio import SocketIO
 
 from game_server.central_client import client
-from game_server.config import (HEARTBEAT_INTERVAL, OUTBOX_PATH, SECRET_KEY,
-                                SERVER_HOST, SERVER_PORT)
-from game_server.outbox import Outbox
+from game_server.config import HEARTBEAT_INTERVAL, SECRET_KEY, SERVER_HOST, SERVER_PORT
+from game_server.events import register_event_handlers, seated_players, tables_idle
+from game_server.join import game_bp
+from game_server.runtime import closing, outbox, socketio
 
-socketio = SocketIO()
-outbox = Outbox(OUTBOX_PATH)
-
-# Changes on every start. A restart loses every table
-BOOT_ID = uuid4().hex
-
-# Set when central shuts this server down: no new round starts, and each table
-# sends its players back to central once its round is over
-closing = threading.Event()
 # Set once central has been told that nobody is left at our tables
 empty_reported = threading.Event()
 
@@ -59,7 +49,6 @@ def _join_central():
 
 
 def _heartbeat_loop():
-    from game_server.events import seated_players
     while True:
         time.sleep(HEARTBEAT_INTERVAL)
         if client.heartbeat(seated_players()) == HTTPStatus.NOT_FOUND:
@@ -93,7 +82,6 @@ def _drain_outbox():
 def _report_if_empty():
     """After a shutdown, tell central once nobody is seated and every result
     and leave has been delivered, so all the buy-ins are settled by then."""
-    from game_server.events import tables_idle
     if not closing.is_set() or empty_reported.is_set() or not tables_idle():
         return
     # With nobody seated, a buy-in still held is one whose player joined but
@@ -117,7 +105,6 @@ def create_app():
     app.config['SECRET_KEY'] = SECRET_KEY
     app.config['SESSION_COOKIE_NAME'] = f'game_session_{SERVER_PORT}'
 
-    from game_server.join import game_bp
     app.register_blueprint(game_bp)
 
     socketio.init_app(app)
@@ -126,7 +113,6 @@ def create_app():
         print('[central] could not register: shutting down')
         sys.exit(1)
 
-    from game_server.events import register_event_handlers
     register_event_handlers(socketio)
 
     threading.Thread(target=_heartbeat_loop, name='heartbeat', daemon=True).start()

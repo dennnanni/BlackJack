@@ -3,9 +3,9 @@ import time
 from flask import session
 from flask_socketio import emit, join_room
 
-from game_server.app import BOOT_ID, closing, outbox
 from game_server.game.model import Hand, TableManager, User
 from game_server.loop import GameLoop
+from game_server.runtime import BOOT_ID, closing, outbox, socketio
 
 table_manager = TableManager()
 user_map = {}
@@ -62,10 +62,7 @@ def unseat(username, close_buy_in=True):
 
 def leave_table(username):
     """A player pressed "Leave table"."""
-
-    from game_server.app import socketio   # circular at import time
-
-    user = user_map.get(username)
+    user =user_map.get(username)
     if user is None:
         return
     table = table_manager.get_user_table(username)

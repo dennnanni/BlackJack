@@ -5,9 +5,9 @@ import jwt
 from flask import (Blueprint, jsonify, redirect, render_template, request,
                    session, url_for)
 
-from game_server.app import BOOT_ID, closing, outbox, socketio
 from game_server.central_client import client
 from game_server.config import CENTRAL_PUBLIC_URL, SHARED_SECRET
+from game_server.runtime import BOOT_ID, closing, outbox, socketio
 from shared.messages import BUY_IN, BUY_IN_ID, SERVER_ID, TYP, TYP_CENTRAL, TYP_JOIN
 
 game_bp = Blueprint('game', __name__)
