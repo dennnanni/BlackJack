@@ -8,6 +8,8 @@ load_dotenv()
 SERVER_HOST = os.getenv('SERVER_HOST', '127.0.0.1')
 SERVER_PORT = int(os.getenv('SERVER_PORT', '8000'))
 
+INTERNAL_URL = os.getenv('INTERNAL_URL', f'http://{SERVER_HOST}:{SERVER_PORT}')
+
 # Comma separated list of central replicas.
 CENTRAL_URLS = os.getenv('CENTRAL_URLS', 'http://localhost:5002').split(',')
 

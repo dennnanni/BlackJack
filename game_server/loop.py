@@ -2,7 +2,7 @@ import time
 from threading import Thread, Event
 from uuid import uuid4
 from game_server.game.model import Deck, Game, Hand
-from game_server.app import outbox, socketio
+from game_server.app import closing, outbox, socketio
 from game_server.central_client import client
 
 BET_WINDOW_SECONDS = 35
@@ -46,11 +46,15 @@ class GameLoop(Thread):
 
     def run(self):
         """Keep offering rounds for as long as anyone is seated. Each iteration
-        is a full round; only the lease can hold the next one back."""
+        is a full round; only the lease can hold the next one back. After a
+        shutdown the round in progress ends as usual, then everyone is sent away."""
         while self.table.is_ready_to_start():
             self._await_lease()
             if not self.table.is_ready_to_start():
                 break  
+            if closing.is_set():
+                self._evict()
+                break
             try:
                 self._play_round()
             except Exception as e:
@@ -66,7 +70,8 @@ class GameLoop(Thread):
         if client.lease_valid():
             return
         socketio.emit('lease_expired', {'table': self.table.id}, to=self.room_id)
-        while not client.lease_valid() and self.table.is_ready_to_start():
+        while (not client.lease_valid() and self.table.is_ready_to_start()
+               and not closing.is_set()):
             socketio.sleep(LEASE_CHECK_SECONDS)
         if client.lease_valid():
             socketio.emit('lease_restored', {'table': self.table.id}, to=self.room_id)
@@ -170,6 +175,16 @@ class GameLoop(Thread):
         # end the round
         socketio.sleep(ROUND_RESULT_DELAY)
         self._end_round()
+
+    def _evict(self):
+        """Send every player of the table back to central: their buy-ins are
+        closed through the outbox, even for those who are not connected."""
+        from game_server.events import unseat
+        socketio.emit('seat_refused', {
+            'message': 'This server is shutting down: back to the central server to play again'
+        }, to=self.room_id)
+        for user in self.table.users + self.table.observers:
+            unseat(user.username)
 
     def _end_round(self):
         """End the round and start the next one: observers become players,

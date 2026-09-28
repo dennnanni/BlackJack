@@ -18,6 +18,12 @@ outbox = Outbox(OUTBOX_PATH)
 # Changes on every start. A restart loses every table
 BOOT_ID = uuid4().hex
 
+# Set when central shuts this server down: no new round starts, and each table
+# sends its players back to central once its round is over
+closing = threading.Event()
+# Set once central has been told that nobody is left at our tables
+empty_reported = threading.Event()
+
 REGISTRATION_ATTEMPTS = 5
 REGISTRATION_RETRY_SECONDS = 2
 SEND_RETRY_SECONDS = 2
@@ -84,10 +90,25 @@ def _drain_outbox():
     return True
 
 
+def _report_if_empty():
+    """After a shutdown, tell central once nobody is seated and every result
+    and leave has been delivered, so all the buy-ins are settled by then."""
+    from game_server.events import tables_idle
+    if not closing.is_set() or empty_reported.is_set() or not tables_idle():
+        return
+    # With nobody seated, a buy-in still held is one whose player joined but
+    # never sat down: central has to close it as well
+    outbox.abandon_seats()
+    if _drain_outbox() and outbox.is_empty() and client.report_empty():
+        empty_reported.set()
+        print('[central] every player has left: reported the tables empty')
+
+
 def _sender_loop():
     """Drain the outbox towards central, retrying on failure."""
     while True:
         _drain_outbox()
+        _report_if_empty()
         time.sleep(SEND_RETRY_SECONDS)
 
 

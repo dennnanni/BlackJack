@@ -5,10 +5,10 @@ import jwt
 from flask import (Blueprint, jsonify, redirect, render_template, request,
                    session, url_for)
 
-from game_server.app import BOOT_ID, outbox
+from game_server.app import BOOT_ID, closing, outbox, socketio
 from game_server.central_client import client
 from game_server.config import CENTRAL_PUBLIC_URL, SHARED_SECRET
-from shared.messages import BUY_IN, BUY_IN_ID, TYP, TYP_JOIN
+from shared.messages import BUY_IN, BUY_IN_ID, SERVER_ID, TYP, TYP_CENTRAL, TYP_JOIN
 
 game_bp = Blueprint('game', __name__)
 
@@ -19,23 +19,23 @@ class JoinError(Exception):
         self.status = status
 
 
-def verify_join_token(token, expected_server_id):
-    """Decode and validate a join token minted by the central server.
-
-    Returns the token payload; raises JoinError if the token is invalid,
-    expired, not a join token, or was minted for a different server.
-    """
+def verify_token(token, typ, expected_server_id):
+    """Decode and validate a token minted by the central server."""
     try:
         payload = jwt.decode(token, SHARED_SECRET, algorithms=['HS256'])
     except jwt.InvalidTokenError as e:
         raise JoinError(f'Invalid token: {e}', 401)
-    # The mirror of central's check: a server token is signed with the same
-    # secret and must not be usable to walk in as a player.
-    if payload.get(TYP) != TYP_JOIN:
-        raise JoinError('Not a join token', 401)
-    if payload.get('server_id') != expected_server_id:
-        raise JoinError('Token was minted for a different server', 403)
     
+    if payload.get(TYP) != typ:
+        raise JoinError(f'Not a {typ} token', 401)
+    if payload.get(SERVER_ID) != expected_server_id:
+        raise JoinError('Token was minted for a different server', 403)
+    return payload
+
+
+def verify_join_token(token, expected_server_id):
+    """A join token must also carry the buy-in the player brings."""
+    payload = verify_token(token, TYP_JOIN, expected_server_id)
     if payload.get(BUY_IN_ID) is None or payload.get(BUY_IN) is None:
         raise JoinError('Token carries no buy-in', 401)
     return payload
@@ -88,6 +88,11 @@ def join():
     except JoinError as e:
         return jsonify({'error': str(e)}), e.status
 
+    # we don't seat new players while the server is closing
+    if closing.is_set():
+        outbox.enqueue_leave(payload[BUY_IN_ID])
+        return redirect(CENTRAL_PUBLIC_URL)
+
     # Identity and money come from the signed token, never from the client.
     # The player brings the buy-in, not their whole balance; join_exp bounds
     # how long that buy-in may still take a seat.
@@ -101,3 +106,23 @@ def join():
     # between, the restart still has to close this buy-in.
     outbox.seat(payload[BUY_IN_ID])
     return redirect(url_for('game.index'))
+
+
+@game_bp.route('/api/shutdown', methods=['POST'])
+def shutdown():
+    """Central shuts this server down: each table ends the round in progress,
+    then sends its players back. The server stays up, taking nobody, until it
+    restarts."""
+    auth_header = request.headers.get('Authorization', '')
+    try:
+        if not auth_header.startswith('Bearer '):
+            raise JoinError('Token is required', 401)
+        verify_token(auth_header.removeprefix('Bearer '), TYP_CENTRAL, client.server_id)
+    except JoinError as e:
+        return jsonify({'error': str(e)}), e.status
+
+    if not closing.is_set():
+        print('[central] shutdown ordered: finishing the rounds in progress')
+        closing.set()
+        socketio.emit('server_closing', {})
+    return '', 202

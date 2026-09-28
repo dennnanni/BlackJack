@@ -92,6 +92,13 @@ class Outbox:
                 'SELECT buy_in_id FROM pending_leave ORDER BY created_at').fetchall()
         return [buy_in_id for (buy_in_id,) in rows]
 
+    def is_empty(self):
+        """Nothing left to deliver to central."""
+        with self._connection() as conn:
+            rounds = conn.execute('SELECT COUNT(*) FROM pending').fetchone()[0]
+            leaves = conn.execute('SELECT COUNT(*) FROM pending_leave').fetchone()[0]
+        return rounds == 0 and leaves == 0
+
     def ack_leaves(self, buy_in_ids):
         """Central closed these buy-ins: the entries are no longer needed."""
         with self._connection() as conn:

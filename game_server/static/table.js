@@ -167,6 +167,10 @@ socket.on("lease_restored", () => {
     setStatus("Central server is back — resuming play.");
 });
 
+socket.on("server_closing", () => {
+    $("closing-banner").hidden = false;
+});
+
 socket.on("no_players_bet", () => {
     setPhase("waiting", "Nobody bet this round. Starting a new betting round…");
 });

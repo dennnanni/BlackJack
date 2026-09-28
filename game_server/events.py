@@ -3,7 +3,7 @@ import time
 from flask import session
 from flask_socketio import emit, join_room
 
-from game_server.app import BOOT_ID, outbox
+from game_server.app import BOOT_ID, closing, outbox
 from game_server.game.model import Hand, TableManager, User
 from game_server.loop import GameLoop
 
@@ -28,19 +28,23 @@ def seated_players():
     return list(user_map)
 
 
+def tables_idle():
+    """Nobody seated and no table in the middle of a round."""
+    return not user_map and not any(loop.running for loop in table_game_map.values())
+
+
 def _room(table):
     return f"table-{table.id}"
 
 
 def can_take_seat(buy_in_id, join_exp, boot_id):
-    """Whether a session may still sit down: it was opened by this very run
-    of this server, its buy-in has not seated anyone yet and the join token
-    that brought it has not expired. Every game server signs sessions with the
-    same key, so without the boot check a cookie from another server, or from
-    before a restart whose buy-ins are already closed, would be valid here."""
+    """Whether a session may still sit down: opened by this run of the server,
+    with an unused buy-in and an unexpired join token,
+    and the server is not shutting down."""
     return (buy_in_id is not None and buy_in_id not in seated_buy_ins
             and boot_id == BOOT_ID
-            and time.time() <= join_exp)
+            and time.time() <= join_exp
+            and not closing.is_set())
 
 
 def unseat(username, close_buy_in=True):
@@ -145,8 +149,11 @@ def register_event_handlers(socketio):
         # player has left, this session must go back to central for another.
         buy_in_id = session.get('buy_in_id')
         if not can_take_seat(buy_in_id, session.get('join_exp', 0), session.get('boot_id')):
-            emit('seat_refused', {'message': 'Your seat at this table is over: '
-                                             'back to the central server to play again'})
+            if closing.is_set():
+                message = 'This server is shutting down: back to the central server to play again'
+            else:
+                message = 'Your seat at this table is over: back to the central server to play again'
+            emit('seat_refused', {'message': message})
             return
         seated_buy_ins.add(buy_in_id)
 

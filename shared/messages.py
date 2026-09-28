@@ -19,6 +19,10 @@ RESULTS = 'results'
 TYP = 'typ'
 TYP_JOIN = 'join'
 TYP_SERVER = 'server'
+# Token of the calls central makes to a game server
+TYP_CENTRAL = 'central'
+# Address central uses to reach a game server, the public one may not work from inside
+INTERNAL_URL = 'internal_url'
 # Join token claim: the money a player brings to the table, with BUY_IN_ID
 BUY_IN = 'buy_in'
 USERNAME = 'username'

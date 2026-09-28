@@ -9,9 +9,10 @@ import time
 import jwt
 import requests
 
-from game_server.config import (CAPACITY, CENTRAL_URLS, LEASE_TIMEOUT,
+from game_server.config import (CAPACITY, CENTRAL_URLS, INTERNAL_URL, LEASE_TIMEOUT,
                                 SHARED_SECRET)
 from shared.messages import CAPACITY as CAPACITY_FIELD
+from shared.messages import INTERNAL_URL as INTERNAL_URL_FIELD
 from shared.messages import (BUY_INS, HOST, PLAYERS, PORT, RESULTS, ROUND_ID,
                              SERVER_ID, SETTLED, TYP, TYP_SERVER)
 
@@ -61,7 +62,8 @@ class CentralClient:
         """Announce this server to central; stores the assigned server id."""
         try:
             response = self._post('/api/servers/register',
-                                  {HOST: host, PORT: port, CAPACITY_FIELD: CAPACITY})
+                                  {HOST: host, PORT: port, CAPACITY_FIELD: CAPACITY,
+                                   INTERNAL_URL_FIELD: INTERNAL_URL})
             response.raise_for_status()
             self.server_id = response.json()[SERVER_ID]
             self._last_contact = time.monotonic()
@@ -105,6 +107,16 @@ class CentralClient:
         except (requests.RequestException, KeyError, ValueError) as e:
             print(f'[central] closing buy ins {buy_in_ids} failed: {e}')
             return None
+
+    def report_empty(self):
+        """Tell central that after its shutdown nobody is left at our tables."""
+        try:
+            response = self._post('/api/servers/empty', {})
+            response.raise_for_status()
+            return True
+        except requests.RequestException as e:
+            print(f'[central] reporting the empty tables failed: {e}')
+            return False
 
 
 client = CentralClient(CENTRAL_URLS)
