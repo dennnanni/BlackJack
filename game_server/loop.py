@@ -4,6 +4,7 @@ from uuid import uuid4
 from game_server.game.model import Deck, Game, Hand
 from game_server.central_client import client
 from game_server.runtime import closing, outbox, socketio
+from game_server.seats import absent, close_forfeited_buy_ins, reap_absent, sitting_out, unseat
 
 BET_WINDOW_SECONDS = 35
 TURN_WINDOW_SECONDS = 30
@@ -87,7 +88,6 @@ class GameLoop(Thread):
 
         # Anyone who has opted out isn't in this round, so the
         # table doesn't wait for them.
-        from game_server.events import sitting_out
         for user in self.table.users:
             if user.username in sitting_out:
                 game.remove_active_user(user)
@@ -179,7 +179,6 @@ class GameLoop(Thread):
     def _evict(self):
         """Send every player of the table back to central: their buy-ins are
         closed through the outbox, even for those who are not connected."""
-        from game_server.events import unseat
         socketio.emit('seat_refused', {
             'message': 'This server is shutting down: back to the central server to play again'
         }, to=self.room_id)
@@ -189,15 +188,13 @@ class GameLoop(Thread):
     def _end_round(self):
         """End the round and start the next one: observers become players,
         and anyone who hasn't shown up gives up their spot."""
-        from game_server.events import close_forfeited_buy_ins, reap_absent  # circolare a import time
         game = self.table.game
         self.table.clear_game()
         reap_absent(self.table)
         close_forfeited_buy_ins(game)
 
     def _wait_for_players(self, event, timeout, waiting_on):
-        """The handlers set the event for the common cases; this covers the
-        ones where nobody is left to set it."""
+        """Wait for the event, the timeout, or until everyone we wait on has left."""
         from game_server.events import absent
         deadline = time.monotonic() + timeout
         while not event.is_set():

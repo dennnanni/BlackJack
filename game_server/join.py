@@ -8,6 +8,7 @@ from flask import (Blueprint, jsonify, redirect, render_template, request,
 from game_server.central_client import client
 from game_server.config import CENTRAL_PUBLIC_URL, SHARED_SECRET
 from game_server.runtime import BOOT_ID, closing, outbox, socketio
+from game_server.seats import can_take_seat, leave_table, user_map
 from shared.messages import BUY_IN, BUY_IN_ID, SERVER_ID, TYP, TYP_CENTRAL, TYP_JOIN
 
 game_bp = Blueprint('game', __name__)
@@ -49,8 +50,7 @@ def index():
     if username is None:
         return render_template('index.html')
 
-    from game_server.events import can_take_seat, user_map   # circular at import time
-    user = user_map.get(username)
+    user =user_map.get(username)
     if user is None and not can_take_seat(session.get('buy_in_id'), session.get('join_exp', 0),
                                           session.get('boot_id')):
         # Not seated and the buy-in cannot seat them any more: it has been
@@ -69,7 +69,6 @@ def leave():
     state, and a prefetched GET must never throw a player off their table."""
     username = session.get('username')
     if username:
-        from game_server.events import leave_table
         leave_table(username)
     session.clear()
     return redirect(CENTRAL_PUBLIC_URL)

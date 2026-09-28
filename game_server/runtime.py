@@ -1,5 +1,4 @@
-"""Objects shared by the whole process. Kept apart from app so that every
-module can import them without depending on the app factory."""
+"""Objects shared by the whole process."""
 import threading
 from uuid import uuid4
 

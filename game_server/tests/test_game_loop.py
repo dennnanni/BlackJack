@@ -4,6 +4,7 @@ import time
 import pytest
 
 import game_server.loop as loop_module
+import game_server.seats as seats
 from game_server.game.model import Card, Table, User
 
 
@@ -142,13 +143,12 @@ def test_turn_based_round_then_automatic_restart(loop_env):
 def test_a_player_sitting_out_is_not_dealt_in_nor_waited_for(loop_env):
     """The point of sitting out: the others do not sit through the betting
     window waiting for someone who is not playing."""
-    import game_server.events as events
     sio, box = loop_env
     player, sitter = User('player', 1000), User('sitter', 1000)
     table = Table('t3')
     table.add_user(player)
     table.add_user(sitter)
-    events.sitting_out.add('sitter')
+    seats.sitting_out.add('sitter')
 
     gl = loop_module.GameLoop(table)
     gl.start()
@@ -170,7 +170,7 @@ def test_a_player_sitting_out_is_not_dealt_in_nor_waited_for(loop_env):
         results = sio.wait_for('round_results')['results']
         assert [r['username'] for r in results] == ['player']
     finally:
-        events.sitting_out.discard('sitter')
+        seats.sitting_out.discard('sitter')
         for u in list(table.users):
             table.remove_user(u)
         gl.bets_done_event.set()
@@ -179,13 +179,12 @@ def test_a_player_sitting_out_is_not_dealt_in_nor_waited_for(loop_env):
 
 
 def test_a_table_where_everyone_sits_out_idles_instead_of_dealing(loop_env, monkeypatch):
-    import game_server.events as events
     sio, box = loop_env
     monkeypatch.setattr(loop_module, 'IDLE_ROUND_SECONDS', 0.05)
     sitter = User('sitter', 1000)
     table = Table('t4')
     table.add_user(sitter)
-    events.sitting_out.add('sitter')
+    seats.sitting_out.add('sitter')
 
     gl = loop_module.GameLoop(table)
     gl.start()
@@ -193,7 +192,7 @@ def test_a_table_where_everyone_sits_out_idles_instead_of_dealing(loop_env, monk
         sio.wait_for('table_idle')
         assert 'place_bets' not in sio.names()
     finally:
-        events.sitting_out.discard('sitter')
+        seats.sitting_out.discard('sitter')
         for u in list(table.users):
             table.remove_user(u)
         gl.join(timeout=3)

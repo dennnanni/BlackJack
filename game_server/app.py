@@ -7,9 +7,10 @@ from flask import Flask
 
 from game_server.central_client import client
 from game_server.config import HEARTBEAT_INTERVAL, SECRET_KEY, SERVER_HOST, SERVER_PORT
-from game_server.events import register_event_handlers, seated_players, tables_idle
+from game_server.events import register_event_handlers
 from game_server.join import game_bp
 from game_server.runtime import closing, outbox, socketio
+from game_server.seats import seated_players, tables_idle
 
 # Set once central has been told that nobody is left at our tables
 empty_reported = threading.Event()
