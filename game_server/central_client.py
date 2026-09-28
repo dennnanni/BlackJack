@@ -4,6 +4,7 @@ Every call carries a short-lived Bearer JWT signed with the SHARED_SECRET;
 after registration the token also carries this server's assigned id.
 If the server is dead, the registration will also carry the last server id.
 """
+import random
 import time
 
 import jwt
@@ -21,8 +22,9 @@ SERVER_TOKEN_TTL = 60
 
 class CentralClient:
     def __init__(self, urls):
-        self.urls = urls
-        self._current = 0   # the replica that answered last
+        # each game server starts from a different replica, spreading the load
+        self.urls = random.sample(urls, len(urls))
+        self._current = 0
         self.server_id = None
         self._last_contact = time.monotonic()
 
