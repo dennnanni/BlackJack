@@ -12,19 +12,25 @@ SECRET = 'test-secret'
 MY_SERVER = 7
 
 
-def _token(server_id=MY_SERVER, expires_in=120, secret=SECRET, typ='join'):
+def _token(server_id=MY_SERVER, expires_in=120, secret=SECRET, typ='join',
+           buy_in_id='b-1', buy_in=200.0):
     now = int(time.time())
-    claims = {'sub': 'alice', 'balance': 1000.0, 'server_id': server_id,
+    claims = {'sub': 'alice', 'server_id': server_id,
               'iat': now, 'exp': now + expires_in}
     if typ is not None:
         claims['typ'] = typ
+    if buy_in_id is not None:
+        claims['buy_in_id'] = buy_in_id
+    if buy_in is not None:
+        claims['buy_in'] = buy_in
     return jwt.encode(claims, secret, algorithm='HS256')
 
 
 def test_valid_token_is_accepted():
     payload = verify_join_token(_token(), MY_SERVER)
     assert payload['sub'] == 'alice'
-    assert payload['balance'] == 1000.0
+    assert payload['buy_in_id'] == 'b-1'
+    assert payload['buy_in'] == 200.0
 
 
 def test_token_for_another_server_is_rejected():
@@ -46,8 +52,6 @@ def test_forged_token_is_rejected():
 
 
 def test_a_server_token_cannot_be_used_to_walk_in_as_a_player():
-    """Both token kinds are HS256 over the same secret, so the signature alone
-    proves nothing about which door the holder may open."""
     now = int(time.time())
     server_token = jwt.encode({'typ': 'server', 'server_id': MY_SERVER,
                                'iat': now, 'exp': now + 60}, SECRET, algorithm='HS256')
@@ -57,7 +61,6 @@ def test_a_server_token_cannot_be_used_to_walk_in_as_a_player():
 
 
 def test_an_untyped_token_is_rejected():
-    """Pre-fix tokens carried no class at all: they must not be honoured."""
     with pytest.raises(JoinError) as exc_info:
         verify_join_token(_token(typ=None), MY_SERVER)
     assert exc_info.value.status == 401
