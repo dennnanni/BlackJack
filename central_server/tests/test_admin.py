@@ -73,3 +73,23 @@ def test_admin_sees_the_servers_until_logout(session_db):
 
     client.post('/admin/logout')
     assert client.get('/admin/servers').status_code == 401
+
+
+def test_maintainance_button_requires_the_admin(session_db):
+    server_id = _add_server(session_db)
+    client = _client()
+
+    assert client.post(f'/admin/servers/{server_id}/maintainance').status_code == 401
+    assert session_db.list_servers()[0]['maintainance_since'] is None
+
+
+def test_admin_starts_the_maintainance(session_db):
+    server_id = _add_server(session_db)
+    client = _client()
+    _login(client)
+
+    assert client.post(f'/admin/servers/{server_id + 1}/maintainance').status_code == 404
+    assert client.post(f'/admin/servers/{server_id}/maintainance').status_code == 200
+
+    server = client.get('/admin/servers').get_json()['servers'][0]
+    assert server['maintainance_since'] is not None

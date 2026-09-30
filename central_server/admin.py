@@ -49,3 +49,12 @@ def servers():
     if not _is_admin():
         return jsonify({'error': 'Admin login required'}), 401
     return jsonify({'servers': db.list_servers()})
+
+
+@admin_bp.route('/servers/<int:server_id>/maintainance', methods=['POST'])
+def start_maintainance(server_id):
+    if not _is_admin():
+        return jsonify({'error': 'Admin login required'}), 401
+    if not db.set_server_maintainance(server_id):
+        return jsonify({'error': 'Unknown game server'}), 404
+    return jsonify({'success': True})
