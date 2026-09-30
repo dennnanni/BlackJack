@@ -59,6 +59,9 @@ services:
       INTERNAL_URL: "http://game_server_1:8000"
       CENTRAL_URLS: "http://central_1:5002,http://central_2:5002"
       CENTRAL_PUBLIC_URL: "http://localhost:5002"
+      OUTBOX_PATH: /data/outbox.db
+    volumes:
+      - game_server_1_data:/data
     depends_on:
       - central_1
       - central_2
@@ -76,9 +79,14 @@ services:
       INTERNAL_URL: "http://game_server_2:8001"
       CENTRAL_URLS: "http://central_1:5002,http://central_2:5002"
       CENTRAL_PUBLIC_URL: "http://localhost:5002"
+      OUTBOX_PATH: /data/outbox.db
+    volumes:
+      - game_server_2_data:/data
     depends_on:
       - central_1
       - central_2
 
 volumes:
   postgres_data:
+  game_server_1_data:
+  game_server_2_data:
