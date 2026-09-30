@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, redirect, render_template, request, session
 
-from central_server import db
+from central_server import db, maintainance
 from central_server.config import ADMIN_PASSWORD, ADMIN_USERNAME
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
@@ -55,6 +55,10 @@ def servers():
 def start_maintainance(server_id):
     if not _is_admin():
         return jsonify({'error': 'Admin login required'}), 401
+    # dispatch stops first: if the call below is lost, the shutdown sender
+    # keeps trying
     if not db.set_server_maintainance(server_id):
         return jsonify({'error': 'Unknown game server'}), 404
-    return jsonify({'success': True})
+    server = db.get_server(server_id)
+    reached = server is not None and maintainance.send_shutdown(server)
+    return jsonify({'success': True, 'reached': reached})

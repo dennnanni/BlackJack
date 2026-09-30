@@ -53,6 +53,8 @@ class GameServer(Base):
     capacity = Column(Integer, nullable=False, default=10)
     last_seen = Column(Float, nullable=False, default=0.0)
     maintainance_time = Column(Float)
+    # address central uses to call the server, None for rows older than the column
+    internal_url = Column(String)
 
 class Seat(Base):
     __tablename__ = 'seat'
@@ -115,6 +117,8 @@ def init_db():
         if IS_POSTGRES:
             conn.execute(text('ALTER TABLE gameserver '
                               'ADD COLUMN IF NOT EXISTS maintainance_time DOUBLE PRECISION'))
+            conn.execute(text('ALTER TABLE gameserver '
+                              'ADD COLUMN IF NOT EXISTS internal_url VARCHAR'))
 
 
 def ping():
@@ -155,16 +159,17 @@ def get_user(username):
         return session.get(User, username)
 
 
-def register_server(host, port, capacity):
+def register_server(host, port, capacity, internal_url=None):
     """Insert a new game server; returns its assigned id."""
     with SessionLocal() as session:
-        server = GameServer(host=host, port=port, capacity=capacity, last_seen=_now(session))
+        server = GameServer(host=host, port=port, capacity=capacity,
+                            internal_url=internal_url, last_seen=_now(session))
         session.add(server)
         session.commit()
         return server.id
 
 
-def resurrect_server(server_id, host, port, capacity):
+def resurrect_server(server_id, host, port, capacity, internal_url=None):
     with SessionLocal() as session:
         server = session.get(GameServer, server_id)
         if server is None:
@@ -172,6 +177,7 @@ def resurrect_server(server_id, host, port, capacity):
         server.host = host
         server.capacity = capacity
         server.port = port
+        server.internal_url = internal_url
         server.last_seen = _now(session)
         server.maintainance_time = None
         session.commit()
@@ -229,8 +235,24 @@ def list_servers():
             'last_seen': server.last_seen,
             'last_seen_ago': max(0.0, now - server.last_seen),
             'alive': server.last_seen >= now - HEARTBEAT,
-            'maintainance_since': server.maintainance_time
+            'maintainance_since': server.maintainance_time,
+            'internal_url': server.internal_url,
         } for server, seats in rows]
+
+
+def get_server(server_id):
+    with SessionLocal() as session:
+        return session.get(GameServer, server_id)
+
+
+def get_servers_to_shut_down():
+    """Servers under maintainance that still send heartbeats: they may not
+    have received the shutdown yet."""
+    with SessionLocal() as session:
+        return session.query(GameServer).filter(
+            GameServer.maintainance_time.isnot(None),
+            GameServer.last_seen >= _now(session) - HEARTBEAT
+        ).all()
 
 
 # Note: the opposite of this action is the register

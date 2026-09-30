@@ -18,6 +18,8 @@ if not SECRET_KEY:
 
 # validity period for the join token in seconds
 JOIN_TOKEN_TTL = 120
+# validity period of the token central sends with its calls to a game server
+CENTRAL_TOKEN_TTL = 60
 
 HEARTBEAT = 15
 
@@ -35,6 +37,9 @@ TRIMMER_INTERVAL = 120
 
 # how often the trimmer checks that the database answers
 DB_PROBE_INTERVAL = 5
+
+# how often the shutdown is sent again to the servers under maintainance
+SHUTDOWN_RETRY_INTERVAL = 10
 
 INITIAL_BALANCE = 1000
 

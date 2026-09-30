@@ -5,8 +5,8 @@ import secrets
 import time
 
 import jwt
-from central_server.config import JOIN_TOKEN_TTL, SHARED_SECRET
-from shared.messages import SERVER_ID, TYP, TYP_JOIN, TYP_SERVER
+from central_server.config import CENTRAL_TOKEN_TTL, JOIN_TOKEN_TTL, SHARED_SECRET
+from shared.messages import SERVER_ID, TYP, TYP_CENTRAL, TYP_JOIN, TYP_SERVER
 
 
 def create_join_token(username, server_id, buy_in_id, buy_in):
@@ -22,6 +22,18 @@ def create_join_token(username, server_id, buy_in_id, buy_in):
         'server_id': server_id
     }
 
+    return jwt.encode(token, SHARED_SECRET, algorithm='HS256')
+
+def create_central_token(server_id):
+    """Token of the calls central makes to a game server, valid only for the
+    server with this id."""
+    now = int(time.time())
+    token = {
+        TYP: TYP_CENTRAL,
+        SERVER_ID: server_id,
+        'iat': now,
+        'exp': now + CENTRAL_TOKEN_TTL,
+    }
     return jwt.encode(token, SHARED_SECRET, algorithm='HS256')
 
 def verify_server_token(auth_header, require_server_id=True):

@@ -3,7 +3,7 @@ from http import HTTPStatus
 import logging
 from central_server import db
 from central_server import auth
-from shared.messages import BUY_INS, CAPACITY, SETTLED, ERROR, ROUND_ID, SERVER_ID, SUCCESS, RESULTS, HOST, PORT, PLAYERS, Result
+from shared.messages import BUY_INS, CAPACITY, SETTLED, ERROR, ROUND_ID, SERVER_ID, SUCCESS, RESULTS, HOST, PORT, PLAYERS, INTERNAL_URL, Result
 from flask import Blueprint, jsonify, request
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/servers')
@@ -21,13 +21,15 @@ def register():
     host, port, capacity = data.get(HOST), data.get(PORT), data.get(CAPACITY)
     if not host or not port or not capacity:
         return jsonify({ERROR: 'host and port are required'}), HTTPStatus.BAD_REQUEST
+    # optional: without it central calls the server at its public address
+    internal_url = data.get(INTERNAL_URL)
 
     if server_id is not None:
-        server_id = db.resurrect_server(server_id, host, port, capacity)
+        server_id = db.resurrect_server(server_id, host, port, capacity, internal_url)
 
     # if the gs is a new server or if the id is expired
     if server_id is None:
-        server_id = db.register_server(host, port, capacity)
+        server_id = db.register_server(host, port, capacity, internal_url)
 
     return jsonify({SERVER_ID: server_id}), HTTPStatus.CREATED
 

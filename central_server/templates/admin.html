@@ -89,7 +89,7 @@
 
             async function startMaintainance(server, button) {
                 if (!confirm(`Put server ${server.id} (${server.host}:${server.port}) under ` +
-                             'maintenance? Central stops sending new players to it.')) return;
+                             'maintenance? Players will be kicked out at the end of the round')) return;
                 button.disabled = true;
                 try {
                     const response = await fetch(`/admin/servers/${server.id}/maintainance`,
@@ -99,6 +99,9 @@
                         return;
                     }
                     if (!response.ok) throw new Error(response.status);
+                    if (!(await response.json()).reached) {
+                        alert(`Server ${server.id} is not responding to shutdown`);
+                    }
                 } catch (e) {
                     button.disabled = false;
                     alert(`Could not start the maintenance of server ${server.id}, try again`);
@@ -132,7 +135,8 @@
                 for (const s of servers) {
                     const row = body.insertRow();
                     cell(row, s.id);
-                    cell(row, `${s.host}:${s.port}`);
+                    cell(row, `${s.host}:${s.port}`).title =
+                        `Central calls it at ${s.internal_url || `http://${s.host}:${s.port}`}`;
                     cell(row, badge(s));
                     cell(row, ago(s.last_seen_ago)).title =
                         new Date(s.last_seen * 1000).toLocaleString();
