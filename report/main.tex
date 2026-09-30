@@ -392,7 +392,46 @@ in \cref{requirements} and \cref{ds-features}.
   \end{itemize}
 \end{itemize}
 
+The system adopts a client--server architecture, with two kinds of server.
+
+The central server owns the accounts, the balances and the buy-ins, keeps the registry of the game servers and dispatches the players to them.
+The game servers register with the central server, host the tables, run the rounds and report the results back to it.
+The central server is replicated through stateless instances sharing a single database, allowing any instance to handle any request.
+
+This style was chosen because the two kinds of work have opposite needs.
+The games generate almost all the interactions and must scale with the number of players, 
+so they are spread over a pool of game servers that can be added at runtime, and the failure of one of them only affects its own tables.
+The money, instead, requires strong consistency: keeping it in a single component backed by one database allows to update 
+balances and apply results with ordinary transactions.
+The buy-in connects the two: the central server reserves part of a player's balance and hands it to one game server, which can play it autonomously
+but never beyond that amount.
+
+
 \subsection{Infrastructure}\label{infrastructure}
+\paragraph{Components.}
+The system is made of the following infrastructural components:
+\begin{itemize}
+    \item \textbf{clients}: the players' browsers, in any number;
+    \item one \textbf{reverse proxy}, which acts as load balancer and is the single entry point of the browsers to the central server;
+    \item two \textbf{central server replicas}, stateless and identical;
+    \item one \textbf{relational database}, shared by the central replicas;
+    \item two \textbf{game servers} in the current deployment, and more can be added at runtime. Each one owns a small local database, the \emph{outbox}, which works as a persistent queue of the messages it still has to deliver to the central server.
+\end{itemize}
+
+\paragraph{Distribution.}
+In this project all the components run on the same physical machine, as Docker containers attached to a single virtual network.
+Only the proxy and the game servers are reachable from outside that network, while the central replicas and the database are not.
+In a real deployment, the central replicas and the database would sit in the same datacenter, where the round trip to the database 
+is short, while the game servers could be spread over different regions, close to the players.
+
+\paragraph{Naming and discovery.}
+Inside the network, components are named by host name, resolved by the DNS of the network.
+The browsers only know the address of the proxy, and learn the address of their game server from the central server when they are dispatched.
+The proxy and the game servers know the central replicas by configuration, as a list of host names; the game servers do not go through the proxy, and move to the next replica when one does not answer.
+The central server, instead, is not configured with the game servers: each game server registers at startup, announcing its address and capacity, and receives a numeric identifier, which it keeps across restarts; its heartbeats then keep the registry up to date.
+There is no service discovery for the central replicas, so adding one requires reconfiguring the proxy and every game server.
+
+\TODO{Component / deployment diagram}
 
 % moved from ds-features, to be reworked
 Users see the central server as a single entry point, and its replication is hidden from them. Game servers are not hidden: the URL shows which one a user is playing on, though the interface never points it out. On the other side, replication is explicit between servers, each game server knows the full list of central replicas, so it can switch to another one when a replica fails.
