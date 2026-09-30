@@ -276,33 +276,31 @@ The only human role in the system is the player, as the servers are autonomous a
 \label{ds-features}
 
 \begin{itemize}
-    \item \textbf{Transparency}: users see the central server as a single entry point, and its replication is hidden from them. Game servers are not hidden: the URL shows which one a user is playing on, though the interface never points it out. On the other side, replication is explicit between servers, each game server knows the full list of central replicas, so it can switch to another one when a replica fails.
-    Failure transparency is partial. If something goes wrong during a round, the user doesn't notice and the round finishes normally. If the central server can't be reached when the round ends, the user is warned and can't start a new round.
-    On the consistency, the balance is eventually consistent, and users are warned it may take a moment to update, so a stale number doesn't look like lost money.
-    \item \textbf{Fault tolerance and dependability}: the system values consistency and correctness more than availability. The game servers do not resume rounds after failures to avoid consistency risks, the user is warned the server is not responding and is kicked out. Bets of interrupted rounds are voided, so no money is lost, while results updates are persisted and are sent as soon as possible. Due to replication and the statelessness of the central servers, a crash of multiple instances only affects the load of the remaining. All game servers cycle the central servers as a failover mechanism and stop starting new rounds if none is reachable. The shared database and the client-side proxy are the single point of failure of the system. All the services are restarted upon crashes, in particular the game servers, as they may still have some unposted results.
-    Data loss or corruption is prevented by combining at-least-once delivery with at-most-once recording, resulting in an exacly-once result application. The unapplied results ledger allows for troubleshooting when some results are rejected.
-    \item \textbf{Scalability}: the game servers can be scaled at run-time thanks to the registration mechanism, and they will be assigned some load by the central server dispatch.
-    The central servers are stateless and replicas are hidden behind the proxy, but fixed list of the replicas both in the proxy configuration and in the game server prevent them from being scalable.
-    However, central replicas would always refer to a single instance of the database, which would become the bottleneck.
-    Proper service discovery would be necessary to allow full scaling.
-    \item security and trust: the authorization in the authentication and authorization in the systems is generally implemented with JWT tokens. The tokens are signed with a secret, shared between the central servers and the game servers. The knowledge of this secret is what authenticates the entities. Authorization for servers is implemented presenting the token in each request.
-    User authentication is implemented with a login and authorization is implemented by providing them with a token, signed by the central server, that is validated by the game servers and carries the id of the server it is authenticating to. The two tokens are also told apart by the \texttt{typ} field in the token.
-    The token is the authorization mechanism, however the connection is not secured via a SSL/TSL certificate, therefore the system is prone to replay attacks, although the window is bounded by the token expiry, and buy in sits a player only once. In a real world scenario, the connection should be secured so avoid eavesdropping and hijacking.
-    The central server doesn't fully trust the game server, and performs checks on the buy in values and caps losses and wins if they exceed the buy in. Identity and money come from the token, never from the client.
-    Symmetric keys are used and are shared.
-    \item resource sharing: central server replicas need to access the shared database. In this case, coordination is necessary to handle race conditions in the updates. The coordination is implemented through locks on the database.
-    Player seat is reserved from a game server and may be contended by concurrent dispatches. The player balance is divided into buy ins and then reconciliated. The reconciliation happens idempotently, like the result application.
-    Central server replicas share the same concept of time as they use the shared DB one. Replication of the DB would also complicate the time consistency.
-    \item opennes, interoperability, heterogeneity: the systems is self contained, the interactions are mainly inside the system. It is important that the APIs are aligned between the central and the game server. Alignment is enforced at data level by the shared interface that is imported by both types of servers.
-    Communication happens with REST API and JSON data format between the servers, while WebSockets are used to communicate to the browser.
-    \item evolvability, maintainability: the system could need to be further expanded by introducing database replicas, new consistency mechanisms.
-    Updates to the servers require a restart, and there are no mechanism to safely shutdown the game servers, the round is interruped and bets are voided but money are not lost\NOTEside{this we can fix too}.
-    The system is configurable with .env variables.
-    Pytests ensure basic mechanisms are enforced.
-    The game servers register to the central, and they know the central servers by configuration, no service discovery, therefore differences in centrals deployment require reconfiguration of game servers.
-    \item performance, computation: the interactions with the system are limited per user, the system load depends on how many users are connected and the number of game servers. Rounds posts are parallel operations, that are handled at database level.
-    There are no strict response time constraints, the communication between the servers is asynchronous. The outbox of game servers decouples the end of a round from the network. JSON payloads are small, no bandwith issues. Game servers are multithread, and there is one thread per table.
-    \item open-source stack, no licences. single-machine Docker deployment. resource usage not minimised explicitly but components are light. in a real deployment cost grows with game servers, which can follow demand (link to scalability)
+    \item \textbf{Transparency}: players should perceive the application as a single service. They log in, get sent to a table and play, without knowing how many central replicas exist or which game server hosts their table.
+    Hiding the location of the game servers is less important, since a table naturally lives on one server.
+    Failure transparency is needed only partially, a failure must not cost the player money or make the balance look wrong, but hiding it completely would mean resuming interrupted rounds, which is not worth the consistency risk.
+    Among the servers, distribution does not need to be hidden.
+    \item \textbf{Fault tolerance and dependability}: the system moves money, therefore the fault tolerance is particularly relevant. A lost or duplicated result means a wrong balance, so integrity comes before availability: interrupting a round and voiding its bets is acceptable, applying a result twice is not.
+    The failure of a game server should only affect its own tables, and its players should be able to keep playing elsewhere.
+    Recovery does not have to be immediate, as long as pending results are eventually applied.
+    \item \textbf{Scalability}: most of the load comes from the games, so the capacity to host tables should grow with the number of players, and the system should allow the registration of new game servers run-time.
+    The central server handles fewer and lighter requests, such as logins, dispatches and results, so its scalability is less pressing at the scale of this project.
+    \item \textbf{Security and trust}: the system stores credentials and balances, so players must not be able to forge their identity or their money.
+    The actors have different rights: players can only play at the table they were dispatched to, and only legitimate game servers can register and report results.
+    Trust between servers is not complete either. A game server reports how much a player won or lost, so the central server should not accept results beyond the player's buy-in.
+    Confidentiality of the traffic would be required in a real deployment, but it is out of the scope of this project.
+    \item \textbf{Resource sharing}: player balances are the main shared resource. They are read and updated by every central replica, through buy-ins, dispatches and results coming from different game servers.
+    The same money can be requested concurrently, so updates must be coordinated to never spend a balance twice or lose part of it.
+    Seats are shared in the same way, as a player must not be seated at two tables at once.
+    \item \textbf{Openness, interoperability, heterogeneity}: not a primary concern. The system is self-contained and does not integrate with external services; the only external client is the browser, which only requires standard web protocols.
+    What matters is that the central and game servers agree on the messages they exchange, since they run as separate services.
+    \item \textbf{Evolvability, maintainability}: moderately relevant. It should be possible to grow the system without redesigning it, for example by adding game servers or replicating the database, and to update the servers without losing money in the process.
+    Long-term maintenance is not a goal of the project.
+    \item \textbf{Performance}: not critical. Each player performs a few actions per round, and a round lasts about two minutes, so the load per user is low and response times only need to suit a turn-based game.
+    Concurrency does matter, as many tables play in parallel and their results reach the central server at the same time.
+    Messages are small, so bandwidth is not a concern.
+    \item \textbf{Economy, costs}: not relevant. The project has no budget and runs on a single machine, so the only constraint is to rely on free, open-source components.
+    In a real deployment, costs would grow with the number of game servers, which is one more reason for their number to follow demand.
 \end{itemize}
 
 \NOTE{The following is the template}
