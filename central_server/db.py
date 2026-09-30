@@ -204,6 +204,23 @@ def get_alive_servers():
         ).order_by(seats).all()
 
 
+def list_servers():
+    """Every known game server with its load."""
+    with SessionLocal() as session:
+        now = _now(session)
+        rows = session.query(GameServer, _seat_count()).order_by(GameServer.id).all()
+        return [{
+            'id': server.id,
+            'host': server.host,
+            'port': server.port,
+            'capacity': server.capacity,
+            'seats': seats,
+            'last_seen': server.last_seen,
+            'last_seen_ago': max(0.0, now - server.last_seen),
+            'alive': server.last_seen >= now - HEARTBEAT,
+        } for server, seats in rows]
+
+
 def remove_dead_servers(retention):
     with SessionLocal() as session:
         has_open_buy_in = session.query(BuyIn).filter(

@@ -37,3 +37,9 @@ TRIMMER_INTERVAL = 120
 DB_PROBE_INTERVAL = 5
 
 INITIAL_BALANCE = 1000
+
+# credentials of the maintenance panel
+ADMIN_USERNAME = os.getenv('ADMIN_USERNAME')
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD')
+if not ADMIN_USERNAME or not ADMIN_PASSWORD:
+    raise ValueError('ADMIN_USERNAME or ADMIN_PASSWORD is not set: run `python secret_generator.py` first')
