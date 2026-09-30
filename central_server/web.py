@@ -131,7 +131,7 @@ def play():
 
         try:
             db.take_seat(user.username, server.id)
-        except db.ServerFull:
+        except (db.ServerFull, db.ServerUnderMaintainance):
             db.close_buy_in(server.id, [buy_in_id])
             continue
         except ValueError as e:

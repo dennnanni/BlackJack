@@ -30,6 +30,11 @@ IS_POSTGRES = engine.dialect.name == 'postgresql'
 class ServerFull(Exception):
     """The game server has no free seat left"""
 
+
+class ServerUnderMaintainance(Exception):
+    """The game server is under maintainance"""
+
+
 class User(Base):
     __tablename__ = 'user'
 
@@ -47,6 +52,7 @@ class GameServer(Base):
     port = Column(Integer, nullable=False)
     capacity = Column(Integer, nullable=False, default=10)
     last_seen = Column(Float, nullable=False, default=0.0)
+    maintainance_time = Column(Float)
 
 class Seat(Base):
     __tablename__ = 'seat'
@@ -106,6 +112,9 @@ def init_db():
         if IS_POSTGRES:
             conn.execute(text('SELECT pg_advisory_xact_lock(:id)'), {'id': SCHEMA_LOCK})
         Base.metadata.create_all(bind=conn)
+        if IS_POSTGRES:
+            conn.execute(text('ALTER TABLE gameserver '
+                              'ADD COLUMN IF NOT EXISTS maintainance_time DOUBLE PRECISION'))
 
 
 def ping():
@@ -164,6 +173,7 @@ def resurrect_server(server_id, host, port, capacity):
         server.capacity = capacity
         server.port = port
         server.last_seen = _now(session)
+        server.maintainance_time = None
         session.commit()
         return server_id
 
@@ -200,7 +210,8 @@ def get_alive_servers():
         seats = _seat_count()
         return session.query(GameServer).filter(
             GameServer.last_seen >= _now(session) - HEARTBEAT,
-            seats < GameServer.capacity
+            seats < GameServer.capacity,
+            GameServer.maintainance_time.is_(None) # avoid servers under maintainance
         ).order_by(seats).all()
 
 
@@ -218,7 +229,22 @@ def list_servers():
             'last_seen': server.last_seen,
             'last_seen_ago': max(0.0, now - server.last_seen),
             'alive': server.last_seen >= now - HEARTBEAT,
+            'maintainance_since': server.maintainance_time
         } for server, seats in rows]
+
+
+# Note: the opposite of this action is the register
+def set_server_maintainance(server_id):
+    """Take the server out of dispatch. False if the server is unknown. Asking
+    again keeps the time of the first request."""
+    with SessionLocal() as session:
+        server = session.get(GameServer, server_id, with_for_update=True)
+        if server is None:
+            return False
+        if server.maintainance_time is None:
+            server.maintainance_time = _now(session)
+            session.commit()
+        return True
 
 
 def remove_dead_servers(retention):
@@ -229,6 +255,7 @@ def remove_dead_servers(retention):
         ).exists()
         deleted = session.query(GameServer).filter(
             GameServer.last_seen <= _now(session) - retention,
+            GameServer.maintainance_time.is_(None), # do not remove if under maintainance
             ~has_open_buy_in
         ).delete(synchronize_session=False)
         session.commit()
@@ -245,6 +272,8 @@ def take_seat(username, server_id):
         server = session.get(GameServer, server_id, with_for_update=True)
         if server is None:
             raise ValueError('Unknown game server')
+        if server.maintainance_time is not None:
+            raise ServerUnderMaintainance()
 
         seat = session.get(Seat, username, with_for_update=True)
         if seat is not None and seat.server_id == server_id:
