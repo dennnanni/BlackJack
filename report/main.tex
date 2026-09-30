@@ -394,6 +394,13 @@ in \cref{requirements} and \cref{ds-features}.
 
 \subsection{Infrastructure}\label{infrastructure}
 
+% moved from ds-features, to be reworked
+Users see the central server as a single entry point, and its replication is hidden from them. Game servers are not hidden: the URL shows which one a user is playing on, though the interface never points it out. On the other side, replication is explicit between servers, each game server knows the full list of central replicas, so it can switch to another one when a replica fails.
+The game servers register to the central, and they know the central servers by configuration, no service discovery, therefore differences in centrals deployment require reconfiguration of game servers.
+The central servers are stateless and replicas are hidden behind the proxy, but fixed list of the replicas both in the proxy configuration and in the game server prevent them from being scalable.
+However, central replicas would always refer to a single instance of the database, which would become the bottleneck.
+Proper service discovery would be necessary to allow full scaling.
+
 \begin{itemize}
   \item are there \emph{infrastructural components} that need to be introduced? \emph{how many}?
   %
@@ -466,6 +473,10 @@ Class diagram are welcome here
 
 \subsection{Interaction}\label{interaction}
 
+% moved from ds-features, to be reworked
+It is important that the APIs are aligned between the central and the game server. Alignment is enforced at data level by the shared interface that is imported by both types of servers.
+The communication between the servers is asynchronous. The outbox of game servers decouples the end of a round from the network.
+
 \begin{itemize}
   \item how do components \emph{communicate}? \emph{when}? \emph{what}?
   \item \emph{which} \textbf{interaction patterns} do they enact?
@@ -476,6 +487,9 @@ Sequence diagrams are welcome here
 \end{quote}
 
 \subsection{Behaviour}\label{behaviour}
+
+% moved from ds-features, to be reworked
+Game servers are multithread, and there is one thread per table.
 
 \begin{itemize}
   \item how does \emph{each} component \textbf{behave} individually (e.g.~in \emph{response} to \emph{events} or messages)?
@@ -491,6 +505,13 @@ State diagrams are welcome here
 \end{quote}
 
 \subsection{Data and Consistency Issues}\label{data-and-consistency-issues}
+
+% moved from ds-features, to be reworked
+The balance is eventually consistent, and users are warned it may take a moment to update, so a stale number doesn't look like lost money.
+One single instance of the database is shared across central server replicas, thus requiring coordination to handle race conditions.
+For example, different dispatched may contend the player seat, player balance may be divided into multiple buy-ins, and the game server may post the results to different replicas over the lifespan of the buy-in and the seat.
+The coordination is implemented through locks on the database. Rounds posts are parallel operations, that are handled at database level.
+To ensure the concept of time is shared between replicas, therefore making leases handling equivalent, the database internal time is used. Database replication would further complicate time management.
 
 \begin{itemize}
   \item Is there any data that needs to be stored?
@@ -522,6 +543,11 @@ State diagrams are welcome here
 
 \subsection{Fault-Tolerance}\label{fault-tolerance}
 
+% moved from ds-features, to be reworked
+The system values consistency and correctness more than availability. The game servers do not resume rounds after failures to avoid consistency risks, the user is warned the server is not responding and is kicked out. Bets of interrupted rounds are voided, so no money is lost, while results updates are persisted and are sent as soon as possible. Due to replication and the statelessness of the central servers, a crash of multiple instances only affects the load of the remaining. All game servers cycle the central servers as a failover mechanism and stop starting new rounds if none is reachable. The shared database and the client-side proxy are the single point of failure of the system. All the services are restarted upon crashes, in particular the game servers, as they may still have some unposted results.
+Failure transparency is partial. If something goes wrong during a round, the user doesn't notice and the round finishes normally. If the central server can't be reached when the round ends, the user is warned and can't start a new round.
+Data loss or corruption is prevented by combining at-least-once delivery with at-most-once recording, resulting in an exacly-once result application. The unapplied results ledger allows for troubleshooting when some results are rejected.
+
 \begin{itemize}
   \item Is there any form of data \textbf{replication} / federation / sharing?
   %
@@ -544,6 +570,9 @@ State diagrams are welcome here
 
 \subsection{Availability}\label{availability}
 
+% moved from ds-features, to be reworked
+The game servers can be scaled at run-time thanks to the registration mechanism, and they will be assigned some load by the central server dispatch.
+
 \begin{itemize}
   \item Is there any \textbf{caching} mechanism?
   %
@@ -565,6 +594,12 @@ State diagrams are welcome here
 \end{itemize}
 
 \subsection{Security}\label{security}
+
+% moved from ds-features, to be reworked
+Tokens signed with a shared secret are used to implement authentication and authorization in the system. The game and central servers share the symmetric key, the knowledge of the secret is what authenticates the entities. Authorization for servers is implemented by presenting the token on each request.
+Users log in with their username and password, and the central server issues a join token when they want to play. This token authorizes them to the dispatched game server. The identity of the users and their money always come from the token, which is created and signed by a trusted source, instead of trusting the users.
+Server and join token are not interchangeable and are told apart by a token field.
+Traffic travels over unsecured connection, therefore the system is prone to replay attacks, eavesdropping and hijacking. The token expiry and the buy in management that seats the player only once bound the window for replay attacks.
 
 \begin{itemize}
   \item Is there any form of \textbf{authentication}?
@@ -598,6 +633,9 @@ Please report here all the implementation (technology-dependent) choices you mad
   %
   In this case, better would be to discuss unimplemented features in \cref{future-works}.
 \end{quote}
+
+% moved from ds-features, to be reworked
+Communication happens with REST API and JSON data format between the servers, while WebSockets are used to communicate to the browser.
 
 \begin{itemize}
   \item which \textbf{network protocols} to use?
@@ -641,6 +679,9 @@ Please report here all the implementation (technology-dependent) choices you mad
 
 \subsection{Automatic Testing}\label{automatic-testing}
 
+% moved from ds-features, to be reworked
+Pytests ensure basic mechanisms are enforced.
+
 \begin{itemize}
   \item how were individual components \textbf{\emph{unit}-test}ed?
   
@@ -683,6 +724,9 @@ recall to test corner cases (crashes, errors, etc.)
 
 \section{Deployment}\label{deployment}
 
+% moved from ds-features, to be reworked
+The system is configurable with .env variables.
+
 \begin{itemize}
   \item should one install your software from scratch, how to do it?
   %
@@ -722,6 +766,10 @@ recall to test corner cases (crashes, errors, etc.)
 It should be noted that each student is only responsible for their own section.
 
 \section{Future works}\label{future-works}
+
+% moved from ds-features, to be reworked
+The system could need to be further expanded by introducing database replicas, new consistency mechanisms.
+Updates to the servers require a restart, and there are no mechanism to safely shutdown the game servers, the round is interruped and bets are voided but money are not lost\NOTEside{this we can fix too}.
 
 Discuss possible future works, improvements, extensions, optimizations, etc.
 
