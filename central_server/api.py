@@ -85,3 +85,18 @@ def heartbeat():
     if not db.update_heartbeat(server_id, players):
         return jsonify({ERROR: 'Unknown server id'}), HTTPStatus.NOT_FOUND
     return jsonify({SUCCESS: True}), HTTPStatus.OK
+
+@api_bp.route('/empty', methods=['POST'])
+def empty():
+    """The server notifies it is empty and the maintainance can start"""
+    auth_token = auth.verify_server_token(request.headers.get('Authorization'))
+    if auth_token is None:
+        return jsonify({ERROR: 'Missing or invalid server token'}), HTTPStatus.UNAUTHORIZED
+
+    server_id = auth_token.get(SERVER_ID)
+    idle = db.set_server_idle(server_id)
+    if idle is None:
+        return jsonify({ERROR: 'Unknown server id'}), HTTPStatus.NOT_FOUND
+    if not idle:
+        return jsonify({ERROR: 'Server is not under maintainance'}), HTTPStatus.CONFLICT
+    return jsonify({SUCCESS: True}), HTTPStatus.OK

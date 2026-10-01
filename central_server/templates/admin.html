@@ -45,7 +45,8 @@
             A server is active while it keeps sending heartbeats; after a few seconds
             without one, central stops sending players to it. The load counts the seats
             central assigned to the server. A server under maintenance gets no new players
-            until it registers again. Updated <span id="updated">never</span>.
+            until it registers again: it is closing while it finishes its rounds and while
+            results or open buy ins are left, then it is in maintenance. Updated <span id="updated">never</span>.
         </p>
     </div>
 
@@ -66,15 +67,23 @@
                 return td;
             }
 
+            const BADGES = {
+                active: ['bg-success', 'Active'],
+                down: ['bg-danger', 'Down'],
+                closing: ['bg-warning text-dark', 'Closing'],
+                maintainance: ['bg-info text-dark', 'Maintenance'],
+            };
+
             function badge(server) {
-                // a server under maintenance is expected to stop at some point:
-                // it is not shown as down
-                const [style, text] = server.maintainance_since !== null
-                    ? ['bg-warning text-dark', 'Maintenance']
-                    : server.alive ? ['bg-success', 'Active'] : ['bg-danger', 'Down'];
+                const [style, text] = BADGES[server.state];
                 const span = document.createElement('span');
                 span.className = `badge ${style}`;
                 span.textContent = text;
+                if (server.state === 'closing') {
+                    span.title = server.idle_since === null
+                        ? 'Still finishing rounds or sending results'
+                        : `Waiting for ${server.open_buy_ins} open buy ins to be closed`;
+                }
                 return span;
             }
 

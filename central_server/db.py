@@ -53,7 +53,9 @@ class GameServer(Base):
     capacity = Column(Integer, nullable=False, default=10)
     last_seen = Column(Float, nullable=False, default=0.0)
     maintainance_time = Column(Float)
-    # address central uses to call the server, None for rows older than the column
+    # when the server under maintainance reported that nobody is left at its
+    # tables and every result and leave was delivered
+    idle_time = Column(Float)
     internal_url = Column(String)
 
 class Seat(Base):
@@ -119,6 +121,8 @@ def init_db():
                               'ADD COLUMN IF NOT EXISTS maintainance_time DOUBLE PRECISION'))
             conn.execute(text('ALTER TABLE gameserver '
                               'ADD COLUMN IF NOT EXISTS internal_url VARCHAR'))
+            conn.execute(text('ALTER TABLE gameserver '
+                              'ADD COLUMN IF NOT EXISTS idle_time DOUBLE PRECISION'))
 
 
 def ping():
@@ -180,6 +184,7 @@ def resurrect_server(server_id, host, port, capacity, internal_url=None):
         server.internal_url = internal_url
         server.last_seen = _now(session)
         server.maintainance_time = None
+        server.idle_time = None
         session.commit()
         return server_id
 
@@ -205,39 +210,64 @@ def update_heartbeat(server_id, players):
         return True
 
 
-def _seat_count():
-    return (select(func.count()).select_from(Seat)
-            .where(Seat.server_id == GameServer.id)
-            .correlate(GameServer).scalar_subquery())
+def _seats_per_server(session):
+    return dict(session.query(Seat.server_id, func.count())
+                .group_by(Seat.server_id).all())
+
+
+def _state(server, open_buy_ins, alive):
+    """Returns the string representing the state of the server."""
+    if server.maintainance_time is None:
+        return 'active' if alive else 'down'
+    if server.idle_time is None or open_buy_ins > 0:
+        return 'closing'
+    return 'maintainance'
 
 
 def get_alive_servers():
     with SessionLocal() as session:
-        seats = _seat_count()
-        return session.query(GameServer).filter(
+        seats = _seats_per_server(session)
+        servers = session.query(GameServer).filter(
             GameServer.last_seen >= _now(session) - HEARTBEAT,
-            seats < GameServer.capacity,
             GameServer.maintainance_time.is_(None) # avoid servers under maintainance
-        ).order_by(seats).all()
+        ).all()
+        # least loaded first, full servers are skipped
+        available = [s for s in servers if seats.get(s.id, 0) < s.capacity]
+        available.sort(key=lambda s: seats.get(s.id, 0))
+        return available
 
 
 def list_servers():
     """Every known game server with its load."""
     with SessionLocal() as session:
         now = _now(session)
-        rows = session.query(GameServer, _seat_count()).order_by(GameServer.id).all()
-        return [{
-            'id': server.id,
-            'host': server.host,
-            'port': server.port,
-            'capacity': server.capacity,
-            'seats': seats,
-            'last_seen': server.last_seen,
-            'last_seen_ago': max(0.0, now - server.last_seen),
-            'alive': server.last_seen >= now - HEARTBEAT,
-            'maintainance_since': server.maintainance_time,
-            'internal_url': server.internal_url,
-        } for server, seats in rows]
+        servers = session.query(GameServer).order_by(GameServer.id).all()
+        seat_counts = _seats_per_server(session)
+        # server id -> number of buy ins not closed yet
+        open_counts = dict(session.query(BuyIn.server_id, func.count())
+                           .filter(BuyIn.closed_at.is_(None))
+                           .group_by(BuyIn.server_id).all())
+        result = []
+        for server in servers:
+            seats = seat_counts.get(server.id, 0)
+            open_buy_ins = open_counts.get(server.id, 0)
+            alive = server.last_seen >= now - HEARTBEAT
+            result.append({
+                'id': server.id,
+                'host': server.host,
+                'port': server.port,
+                'capacity': server.capacity,
+                'seats': seats,
+                'open_buy_ins': open_buy_ins,
+                'last_seen': server.last_seen,
+                'last_seen_ago': max(0.0, now - server.last_seen),
+                'alive': alive,
+                'state': _state(server, open_buy_ins, alive),
+                'maintainance_since': server.maintainance_time,
+                'idle_since': server.idle_time,
+                'internal_url': server.internal_url,
+            })
+        return result
 
 
 def get_server(server_id):
@@ -246,11 +276,12 @@ def get_server(server_id):
 
 
 def get_servers_to_shut_down():
-    """Servers under maintainance that still send heartbeats: they may not
-    have received the shutdown yet."""
+    """Servers under maintainance that still send heartbeats and did not
+    report that they are idle: they may not have received the shutdown yet."""
     with SessionLocal() as session:
         return session.query(GameServer).filter(
             GameServer.maintainance_time.isnot(None),
+            GameServer.idle_time.is_(None),
             GameServer.last_seen >= _now(session) - HEARTBEAT
         ).all()
 
@@ -265,6 +296,22 @@ def set_server_maintainance(server_id):
             return False
         if server.maintainance_time is None:
             server.maintainance_time = _now(session)
+            session.commit()
+        return True
+
+
+def set_server_idle(server_id):
+    """Record that the server under maintainance is idle. None if the server
+    is unknown, False if it is not under maintainance. Asking again keeps the
+    time of the first report."""
+    with SessionLocal() as session:
+        server = session.get(GameServer, server_id, with_for_update=True)
+        if server is None:
+            return None
+        if server.maintainance_time is None:
+            return False
+        if server.idle_time is None:
+            server.idle_time = _now(session)
             session.commit()
         return True
 
