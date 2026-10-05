@@ -299,7 +299,7 @@ The only human role in the system is the player, as the servers are autonomous a
     \item \textbf{Performance}: not critical. Each player performs a few actions per round, and a round lasts about two minutes, so the load per user is low and response times only need to suit a turn-based game.
     Concurrency does matter, as many tables play in parallel and their results reach the central server at the same time.
     Messages are small, so bandwidth is not a concern.
-    \item \textbf{Economy, costs}: not relevant. The project has no budget and runs on a single machine, so the only constraint is to rely on free, open-source components.
+    \item \textbf{Economy, costs}: the project has no budget and runs on a single machine, so the only constraint is to rely on free, open-source components.
     In a real deployment, costs would grow with the number of game servers, which is one more reason for their number to follow demand.
 \end{itemize}
 
@@ -366,21 +366,11 @@ Motivate which distributed system features are relevant for your project, and wh
   \end{itemize}
 \end{itemize}
 
-\NOTE{Not touched from here}
-
 \section{Design}\label{design}
 
 This chapter explains the strategies used to meet the requirements identified in the analysis. 
-%
+
 Ideally, the design should be the same, regardless of the technological choices made during the implementation phase.
-
-\begin{quote}
-You can re-arrange the sections as you prefer, but all the sections must be present in the end
-\end{quote}
-
-\noindent
-\textbf{Important:} try to motivate your design choices in relation to the requirements and features identified 
-in \cref{requirements} and \cref{ds-features}.
 
 \subsection{Architecture}\label{architecture}
 
@@ -403,8 +393,7 @@ The games generate almost all the interactions and must scale with the number of
 so they are spread over a pool of game servers that can be added at runtime, and the failure of one of them only affects its own tables.
 The money, instead, requires strong consistency: keeping it in a single component backed by one database allows to update 
 balances and apply results with ordinary transactions.
-The buy-in connects the two: the central server reserves part of a player's balance and hands it to one game server, which can play it autonomously
-but never beyond that amount.
+The buy-in connects the two: the central server reserves part of a player's balance and hands it to one game server, which can play it autonomously but never beyond that amount.
 
 
 \subsection{Infrastructure}\label{infrastructure}
@@ -434,42 +423,42 @@ There is no service discovery for the central replicas, so adding one requires r
 \TODO{Component / deployment diagram}
 
 % moved from ds-features, to be reworked
-Users see the central server as a single entry point, and its replication is hidden from them. Game servers are not hidden: the URL shows which one a user is playing on, though the interface never points it out. On the other side, replication is explicit between servers, each game server knows the full list of central replicas, so it can switch to another one when a replica fails.
-The game servers register to the central, and they know the central servers by configuration, no service discovery, therefore differences in centrals deployment require reconfiguration of game servers.
-The central servers are stateless and replicas are hidden behind the proxy, but fixed list of the replicas both in the proxy configuration and in the game server prevent them from being scalable.
-However, central replicas would always refer to a single instance of the database, which would become the bottleneck.
-Proper service discovery would be necessary to allow full scaling.
+% Users see the central server as a single entry point, and its replication is hidden from them. Game servers are not hidden: the URL shows which one a user is playing on, though the interface never points it out. On the other side, replication is explicit between servers, each game server knows the full list of central replicas, so it can switch to another one when a replica fails.
+% The game servers register to the central, and they know the central servers by configuration, no service discovery, therefore differences in centrals deployment require reconfiguration of game servers.
+% The central servers are stateless and replicas are hidden behind the proxy, but fixed list of the replicas both in the proxy configuration and in the game server prevent them from being scalable.
+% However, central replicas would always refer to a single instance of the database, which would become the bottleneck.
+% Proper service discovery would be necessary to allow full scaling.
 
-\begin{itemize}
-  \item are there \emph{infrastructural components} that need to be introduced? \emph{how many}?
-  %
-  \begin{itemize}
-    \item e.g.~\emph{clients}, \emph{servers}, \emph{load balancers},
-    \emph{caches}, \emph{databases}, \emph{message brokers},
-    \emph{queues}, \emph{workers}, \emph{proxies}, \emph{firewalls},
-    \emph{CDNs}, \emph{etc.}
-  \end{itemize}
+% \begin{itemize}
+%   \item are there \emph{infrastructural components} that need to be introduced? \emph{how many}?
+%   %
+%   \begin{itemize}
+%     \item e.g.~\emph{clients}, \emph{servers}, \emph{load balancers},
+%     \emph{caches}, \emph{databases}, \emph{message brokers},
+%     \emph{queues}, \emph{workers}, \emph{proxies}, \emph{firewalls},
+%     \emph{CDNs}, \emph{etc.}
+%   \end{itemize}
 
-  \item how do components \emph{distribute} over the network? \emph{where}?
-  %
-  \begin{itemize}
-    \item e.g.~do servers / brokers / databases / etc. sit on the same
-    machine? on the same network? on the same datacenter? on the same
-    continent?
-  \end{itemize}
+%   \item how do components \emph{distribute} over the network? \emph{where}?
+%   %
+%   \begin{itemize}
+%     \item e.g.~do servers / brokers / databases / etc. sit on the same
+%     machine? on the same network? on the same datacenter? on the same
+%     continent?
+%   \end{itemize}
 
-  \item how do components \emph{find} each other?
-  %
-  \begin{itemize}
-    \item how to \emph{name} components?
-    \item e.g.~DNS, \emph{service discovery}, \emph{load balancing},
-    \emph{etc.}
-  \end{itemize}
-\end{itemize}
+%   \item how do components \emph{find} each other?
+%   %
+%   \begin{itemize}
+%     \item how to \emph{name} components?
+%     \item e.g.~DNS, \emph{service discovery}, \emph{load balancing},
+%     \emph{etc.}
+%   \end{itemize}
+% \end{itemize}
 
-\begin{quote}
-Component diagrams are welcome here
-\end{quote}
+% \begin{quote}
+% Component diagrams are welcome here
+% \end{quote}
 
 \subsection{Modelling}\label{modelling}
 
