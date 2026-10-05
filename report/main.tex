@@ -26,6 +26,11 @@
     description={\emph{see} \gls{player}}
 }
 
+\newglossaryentry{administrator}{
+    name={Administrator},
+    description={Separate user who has an overview of the game servers and can put them under maintainance}
+}
+
 \newglossaryentry{balance}{
     name={Balance},
     description={The amount of money the player owns. It is the total amount
@@ -102,6 +107,12 @@
     as an observer until they leave or sit again}
 }
 
+\newglossaryentry{maintainance}{
+    name={Maintainance},
+    description={Status of the game server in which it does not accept new players and kicks out already seated players at the end of the round to empty itself}
+}
+
+
 \newcommand{\emailaddr}[1]{\href{mailto:#1}{\texttt{#1}}}
 
 \title{\LARGE
@@ -150,7 +161,6 @@ The proposed project is a web application to play BlackJack online.
 The nature of the game is single-player, with the user playing against the dealer, but this project implements it with multi-player tables and turns to represent the real experience of the casinos.
 The project is implemented with local hosting on a single machine, but it is designed to scale to a geographically distributed online application with proper hosting.
 The core entities of the system are the central server and the game servers: the central server handles the users' data (i.e. username, password, balance and buy-ins) and the results data, and dispatches the players to the game servers, which manage the tables and the game lifecycle.
-The only human role is the player, while the game servers are autonomous actors that register themselves with the central server.
 
 The users can access the application via browser, either desktop or mobile, and register and login to their account, receiving a default starting balance.
 Then, the players can join a table and start betting.
@@ -161,7 +171,8 @@ Interactions with the game servers are mildly frequent, with an average of three
 
 Since the majority of the users' interactions happen towards the game servers, distribution is useful to decouple the games from the coordination, scale the games capacity on request and increase fault-tolerance of the games.
 However, the central server represents a single point of failure of the system.
-The only human role in the system is the player, as the servers are autonomous actors that interact with the central server.
+The roles in the system are two, the player and the administrator. 
+The administrator has a separate panel in which all the game servers are listed, with their load, last heartbeat record and status.
 
 
 % \NOTE{Instructions below}
@@ -462,6 +473,23 @@ There is no service discovery for the central replicas, so adding one requires r
 
 \subsection{Modelling}\label{modelling}
 
+The central server models the accounts and the money of the players, and the registry of the game servers.
+A user holds their credentials and their free balance.
+When a player is dispatched, part of that balance is moved into a buy-in, which records the server it was handed to, the initial amount and what remains of it, and is settled back into the balance when the player leaves.
+The total money of a player is therefore the free balance plus the remainder of every open buy-in.
+A player has at most one open buy-in per game server, but may have more than one if a server dies; the player can move to another one while the old buy-in stays open, so that results still queued by the dead server can be applied, until it is closed as abandoned.
+The seat binds a player to a single game server and prevents the player from seating into different servers at the same time.
+The game servers are kept as a registry with their address, capacity, last heartbeat and maintenance state, from which the server is classified as active, down, closing or under maintenance.
+Round results are applied to their buy-in on arrival, and only the round identifier is recorded, to discard duplicate deliveries; results that cannot be matched to a valid buy-in are stored for inspection.
+
+The game server is in charge of the game logic. It models the concept of player, table, round, cards, and hands. Each table hosts a maximum of three players and runs a sequence of rounds. Each round has a deck, from which the cards are drawn. Players have their own hand, and also the game holds the hand of the dealer. Players come with the id of the buy-in opened for that server by the central, and each round result carries it for each player so that the central server knows what to apply the result to.
+
+All central server's state lives in the shared database, which lets the replicas be stateless. The login session travels in a signed cookie, and the only thing a player carries to a game server is the join token, which describes their buy-in.
+In contrast, most of the game server's state is in-memory only, with the server only persisting its own id, assigned players' buy-ins and the queue of unposted results.
+
+Players and the administrator interact with the central server through commands (register, log in, play, put a server under maintenance) and queries (the balance, the list of servers), while the game servers mostly send it events: a server registered, a round finished, a player left, the server is idle, together with the periodic heartbeat that reports who is still seated. The only command flowing the other way is the shutdown sent to the servers under maintenance.
+The interaction between the players and the game server happens with commands on one side (e.g., mid-round actions), and events on the other (e.g., round started, bets closed, turn passed).
+
 \begin{itemize}
   \item which \textbf{domain entities} are there?
   %
@@ -513,6 +541,12 @@ The communication between the servers is asynchronous. The outbox of game server
 \begin{quote}
 Sequence diagrams are welcome here
 \end{quote}
+
+\begin{figure}
+  \includegraphics[width=1\textwidth]{img/sequence_diagram}
+  \centering
+  \caption{Interaction of the system during a game lifetime}
+\end{figure}
 
 \subsection{Behaviour}\label{behaviour}
 
