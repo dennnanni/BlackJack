@@ -28,7 +28,7 @@
 
 \newglossaryentry{administrator}{
     name={Administrator},
-    description={Separate user who has an overview of the game servers and can put them under maintainance}
+    description={Separate user who has an overview of the game servers and can put them under maintenance}
 }
 
 \newglossaryentry{balance}{
@@ -107,8 +107,8 @@
     as an observer until they leave or sit again}
 }
 
-\newglossaryentry{maintainance}{
-    name={Maintainance},
+\newglossaryentry{maintenance}{
+    name={maintenance},
     description={Status of the game server in which it does not accept new players and kicks out already seated players at the end of the round to empty itself}
 }
 
@@ -531,18 +531,27 @@ The interaction between the players and the game server happens with commands on
 
 \subsection{Interaction}\label{interaction}
 
-% moved from ds-features, to be reworked
-It is important that the APIs are aligned between the central and the game server. Alignment is enforced at data level by the shared interface that is imported by both types of servers.
-The communication between the servers is asynchronous. The outbox of game servers decouples the end of a round from the network.
-
+The components of the system interact with each other both in a synchronous and asynchronous manner:
 \begin{itemize}
-  \item how do components \emph{communicate}? \emph{when}? \emph{what}?
-  \item \emph{which} \textbf{interaction patterns} do they enact?
+  \item \textbf{client - central server}: request/response synchronous communication, the client retrieves the user information and balance, and requests to play.
+  \item \textbf{central server - game server}: 
+  \begin{itemize}
+    \item \textit{synchronous}: game servers' registration procedure, heartbeat confirms both ends are still active and game server stops starting new rounds if there is no response, shutdown command to put the game server under maintenance.
+    \item \textit{asynchronous}: round results and leaves are stored in the outbox and sent as soon as possible, with the games still going.
+    \item players dispatch to the game server happens by means of the join token, without direct interaction between the servers.
+  \end{itemize}
+  \item \textbf{client - game server}: 
+  \begin{itemize}
+    \item \textit{synchronous}: joining a table.
+    \item \textit{asynchronous}: game interactions such as server events and player actions.
+    \item \textit{broadcast}: server events are published to every players of the table.
+  \end{itemize}
 \end{itemize}
 
-\begin{quote}
-Sequence diagrams are welcome here
-\end{quote}
+% \begin{itemize}
+%   \item how do components \emph{communicate}? \emph{when}? \emph{what}?
+%   \item \emph{which} \textbf{interaction patterns} do they enact?
+% \end{itemize}
 
 \begin{figure}
   \includegraphics[width=1\textwidth]{img/sequence_diagram}
