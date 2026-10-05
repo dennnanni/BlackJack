@@ -314,84 +314,82 @@ The administrator has a separate panel in which all the game servers are listed,
     In a real deployment, costs would grow with the number of game servers, which is one more reason for their number to follow demand.
 \end{itemize}
 
-\NOTE{The following is the template}
+% Motivate which distributed system features are relevant for your project, and which are not.
+% %
+% \begin{itemize}
+%   \item transparency
+%   \begin{itemize}
+%     \item does your system need to hide distribution details from users or developers?
+%     \item is it important that failures, location, or replication are invisible?
+%   \end{itemize}
 
-Motivate which distributed system features are relevant for your project, and which are not.
-%
-\begin{itemize}
-  \item transparency
-  \begin{itemize}
-    \item does your system need to hide distribution details from users or developers?
-    \item is it important that failures, location, or replication are invisible?
-  \end{itemize}
+%   \item fault tolerance, dependability -- availability, reliability, integrity, maintainability, safety
+%   \begin{itemize}
+%     \item what happens if a component fails? is uninterrupted service required?
+%     \item is data loss or corruption unacceptable?
+%     \item how quickly must the system recover from faults?
+%   \end{itemize}
 
-  \item fault tolerance, dependability -- availability, reliability, integrity, maintainability, safety
-  \begin{itemize}
-    \item what happens if a component fails? is uninterrupted service required?
-    \item is data loss or corruption unacceptable?
-    \item how quickly must the system recover from faults?
-  \end{itemize}
+%   \item scalability
+%   \begin{itemize}
+%     \item will the system need to handle increasing numbers of users, requests, or data?
+%     \item is it expected to grow over time?
+%   \end{itemize}
 
-  \item scalability
-  \begin{itemize}
-    \item will the system need to handle increasing numbers of users, requests, or data?
-    \item is it expected to grow over time?
-  \end{itemize}
+%   \item security, trust
+%   \begin{itemize}
+%     \item is sensitive data being processed or stored?
+%     \item are there multiple user roles with different permissions?
+%     \item is authentication or authorization required?
+%   \end{itemize}
 
-  \item security, trust
-  \begin{itemize}
-    \item is sensitive data being processed or stored?
-    \item are there multiple user roles with different permissions?
-    \item is authentication or authorization required?
-  \end{itemize}
+%   \item resource sharing
+%   \begin{itemize}
+%     \item do multiple users or components need access to shared resources?
+%     \item is coordination or synchronization needed?
+%   \end{itemize}
 
-  \item resource sharing
-  \begin{itemize}
-    \item do multiple users or components need access to shared resources?
-    \item is coordination or synchronization needed?
-  \end{itemize}
+%   \item openness, interoperability, heterogeneity of components
+%   \begin{itemize}
+%     \item Will your system interact with external systems or use components built with different technologies?
+%     \item Is standardization or compatibility important?
+%   \end{itemize}
 
-  \item openness, interoperability, heterogeneity of components
-  \begin{itemize}
-    \item Will your system interact with external systems or use components built with different technologies?
-    \item Is standardization or compatibility important?
-  \end{itemize}
+%   \item evolvability, maintainability
+%   \begin{itemize}
+%     \item Will the system need to be updated or extended after deployment?
+%     \item Is long-term maintenance a concern?
+%   \end{itemize}
 
-  \item evolvability, maintainability
-  \begin{itemize}
-    \item Will the system need to be updated or extended after deployment?
-    \item Is long-term maintenance a concern?
-  \end{itemize}
+%   \item performance, concurrency, computation / communication efficiency, bandwidth
+%   \begin{itemize}
+%     \item Are there strict requirements on response time or throughput?
+%     \item Will many operations happen in parallel?
+%     \item Is network usage a concern?
+%   \end{itemize}
 
-  \item performance, concurrency, computation / communication efficiency, bandwidth
-  \begin{itemize}
-    \item Are there strict requirements on response time or throughput?
-    \item Will many operations happen in parallel?
-    \item Is network usage a concern?
-  \end{itemize}
-
-  \item economy, costs  
-  \begin{itemize}
-    \item Are there budget constraints for development, deployment, or operation?
-    \item Is minimizing resource usage important?
-  \end{itemize}
-\end{itemize}
+%   \item economy, costs  
+%   \begin{itemize}
+%     \item Are there budget constraints for development, deployment, or operation?
+%     \item Is minimizing resource usage important?
+%   \end{itemize}
+% \end{itemize}
 
 \section{Design}\label{design}
 
-This chapter explains the strategies used to meet the requirements identified in the analysis. 
+% This chapter explains the strategies used to meet the requirements identified in the analysis. 
 
-Ideally, the design should be the same, regardless of the technological choices made during the implementation phase.
+% Ideally, the design should be the same, regardless of the technological choices made during the implementation phase.
 
 \subsection{Architecture}\label{architecture}
 
-\begin{itemize}
-  \item Which architectural style?
-  %
-  \begin{itemize}
-    \item why?
-  \end{itemize}
-\end{itemize}
+% \begin{itemize}
+%   \item Which architectural style?
+%   %
+%   \begin{itemize}
+%     \item why?
+%   \end{itemize}
+% \end{itemize}
 
 The system adopts a client--server architecture, with two kinds of server.
 
