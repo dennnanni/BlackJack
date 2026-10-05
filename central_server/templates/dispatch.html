@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Joining table…</title>
+</head>
+
+<body onload="document.forms[0].submit()">
+    <p>Found a table: joining…</p>
+    <form method="POST" action="{{ join_url }}">
+        <input type="hidden" name="token" value="{{ token }}">
+        <noscript><button type="submit">Continue to your table</button></noscript>
+    </form>
+</body>
+
+</html>

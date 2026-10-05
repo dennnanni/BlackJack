@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Blackjack</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='table.css') }}">
+</head>
+
+<body>
+    <h1>Blackjack</h1>
+
+    {% if not username %}
+    <div class="zone">
+        <p>This is a Blackjack game server. Join a table through the central server.</p>
+    </div>
+    {% else %}
+    <div class="zone topbar">
+        <span><strong class="me">{{ username }}</strong> — balance: $<span id="balance">{{ balance }}</span></span>
+        <button id="leave-button" class="danger">Leave table</button>
+    </div>
+
+    <div id="leave-modal" class="backdrop">
+        <div class="modal">
+            <h3>Leave the table?</h3>
+            <p id="leave-warning"></p>
+            <p>You will go back to the central server, where your balance of record is kept.</p>
+            <form method="post" action="{{ url_for('game.leave') }}">
+                <button class="danger" type="submit">Yes, leave the table</button>
+                <button id="stay-button" type="button">Stay</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="game-area" data-username="{{ username }}" data-balance="{{ balance }}">
+        <div id="connection-banner" class="zone banner" hidden>
+            ⚠ Connection to the table lost — reconnecting…
+        </div>
+
+        <div id="seat-refused-banner" class="zone banner" hidden>
+            <form id="seat-refused-form" method="post" action="{{ url_for('game.leave') }}">
+                ⚠ <span id="seat-refused-text"></span>
+                <button class="danger" type="submit">Leave now</button>
+            </form>
+        </div>
+
+        <div id="lease-banner" class="zone banner" hidden>
+            ⚠ Connection to the central server lost — no new rounds can start until it is
+            back. You keep your seat and nothing is lost.
+        </div>
+
+        <div id="closing-banner" class="zone banner" hidden>
+            ⚠ This server is shutting down: the current round will finish, then you will
+            go back to the central server.
+        </div>
+
+        <div id="status" class="zone">Connecting to the table…</div>
+
+        <div class="zone dealer">
+            <h3>Dealer</h3>
+            <div><span id="dealer-cards">—</span><span id="dealer-total" class="total"></span></div>
+        </div>
+
+        <div class="zone">
+            <h3>Players</h3>
+            <div id="players-area">—</div>
+        </div>
+
+        <div class="zone" id="controls">
+            <span id="bet-controls">
+                <input id="bet-amount" placeholder="Your bet" type="number" min="1">
+                <button id="bet-button">Place bet</button>
+                <span id="bet-timer"></span>
+            </span>
+            <span id="actions">
+                <button data-action="hit">Hit</button>
+                <button data-action="stand">Stand</button>
+                <button id="double-button" data-action="double">Double down</button>
+            </span>
+            <button id="sit-toggle">Sit out</button>
+        </div>
+
+        <div class="zone">
+            <h3>Table log</h3>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.socket.io/4.6.1/socket.io.min.js"></script>
+    <script src="{{ url_for('static', filename='table.js') }}"></script>
+    {% endif %}
+</body>
+
+</html>

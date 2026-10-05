@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Maintenance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+</head>
+
+<body class="bg-dark text-white">
+
+    <div class="container py-5">
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <h2 class="mb-0">Game servers</h2>
+            <form method="POST" action="/admin/logout">
+                <button type="submit" class="btn btn-danger">Logout</button>
+            </form>
+        </div>
+
+        <div id="poll-error" class="alert alert-warning" hidden>
+            The central server does not answer: the list below may be out of date.
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-dark table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Address</th>
+                        <th>Status</th>
+                        <th>Last seen</th>
+                        <th style="min-width: 12rem">Load</th>
+                        <th>Maintenance since</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody id="servers">
+                    <tr><td colspan="7" class="text-white-50">Loading…</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <p class="small text-white-50">
+            A server is active while it keeps sending heartbeats; after a few seconds
+            without one, central stops sending players to it. The load counts the seats
+            central assigned to the server. A server under maintenance gets no new players
+            until it registers again: it is closing while it finishes its rounds and while
+            results or open buy ins are left, then it is in maintenance. Updated <span id="updated">never</span>.
+        </p>
+    </div>
+
+    <script>
+        (function () {
+            const POLL_INTERVAL = 3000; // ms
+
+            function ago(seconds) {
+                if (seconds < 60) return `${Math.floor(seconds)}s ago`;
+                if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+                return `${Math.floor(seconds / 3600)}h ago`;
+            }
+
+            function cell(row, content) {
+                const td = row.insertCell();
+                if (content instanceof Node) td.appendChild(content);
+                else td.textContent = content;
+                return td;
+            }
+
+            const BADGES = {
+                active: ['bg-success', 'Active'],
+                down: ['bg-danger', 'Down'],
+                closing: ['bg-warning text-dark', 'Closing'],
+                maintainance: ['bg-info text-dark', 'Maintenance'],
+            };
+
+            function badge(server) {
+                const [style, text] = BADGES[server.state];
+                const span = document.createElement('span');
+                span.className = `badge ${style}`;
+                span.textContent = text;
+                if (server.state === 'closing') {
+                    span.title = server.idle_since === null
+                        ? 'Still finishing rounds or sending results'
+                        : `Waiting for ${server.open_buy_ins} open buy ins to be closed`;
+                }
+                return span;
+            }
+
+            function maintainanceButton(server) {
+                const button = document.createElement('button');
+                button.className = 'btn btn-sm btn-outline-warning text-nowrap';
+                button.textContent = 'Start maintenance';
+                button.disabled = server.maintainance_since !== null;
+                button.addEventListener('click', () => startMaintainance(server, button));
+                return button;
+            }
+
+            async function startMaintainance(server, button) {
+                if (!confirm(`Put server ${server.id} (${server.host}:${server.port}) under ` +
+                             'maintenance? Players will be kicked out at the end of the round')) return;
+                button.disabled = true;
+                try {
+                    const response = await fetch(`/admin/servers/${server.id}/maintainance`,
+                                                 {method: 'POST'});
+                    if (response.status === 401) {
+                        window.location = '/admin/login';
+                        return;
+                    }
+                    if (!response.ok) throw new Error(response.status);
+                    if (!(await response.json()).reached) {
+                        alert(`Server ${server.id} is not responding to shutdown`);
+                    }
+                } catch (e) {
+                    button.disabled = false;
+                    alert(`Could not start the maintenance of server ${server.id}, try again`);
+                }
+                refresh();
+            }
+
+            function load(seats, capacity) {
+                const percent = capacity > 0 ? Math.min(100, 100 * seats / capacity) : 0;
+                const wrapper = document.createElement('div');
+                wrapper.className = 'd-flex align-items-center gap-2';
+                const bar = document.createElement('div');
+                bar.className = 'progress flex-grow-1';
+                const fill = document.createElement('div');
+                fill.className = `progress-bar ${percent >= 100 ? 'bg-danger' : ''}`;
+                fill.style.width = `${percent}%`;
+                bar.appendChild(fill);
+                const label = document.createElement('span');
+                label.textContent = `${seats} / ${capacity}`;
+                wrapper.append(bar, label);
+                return wrapper;
+            }
+
+            function showServers(servers) {
+                const body = document.getElementById('servers');
+                body.replaceChildren();
+                if (servers.length === 0) {
+                    cell(body.insertRow(), 'No game server has registered yet').colSpan = 7;
+                    return;
+                }
+                for (const s of servers) {
+                    const row = body.insertRow();
+                    cell(row, s.id);
+                    cell(row, `${s.host}:${s.port}`).title =
+                        `Central calls it at ${s.internal_url || `http://${s.host}:${s.port}`}`;
+                    cell(row, badge(s));
+                    cell(row, ago(s.last_seen_ago)).title =
+                        new Date(s.last_seen * 1000).toLocaleString();
+                    cell(row, load(s.seats, s.capacity));
+                    cell(row, s.maintainance_since === null
+                        ? '—' : new Date(s.maintainance_since * 1000).toLocaleString());
+                    cell(row, maintainanceButton(s));
+                }
+            }
+
+            async function refresh() {
+                try {
+                    const response = await fetch('/admin/servers');
+                    if (response.status === 401) {
+                        window.location = '/admin/login';
+                        return;
+                    }
+                    if (!response.ok) throw new Error(response.status);
+                    showServers((await response.json()).servers);
+                    document.getElementById('poll-error').hidden = true;
+                    document.getElementById('updated').textContent =
+                        new Date().toLocaleTimeString();
+                } catch (e) {
+                    // central unreachable
+                    document.getElementById('poll-error').hidden = false;
+                }
+            }
+
+            async function poll() {
+                // avoid requests in background
+                if (!document.hidden) {
+                    await refresh();
+                }
+                // the next request starts only after this one is done
+                setTimeout(poll, POLL_INTERVAL);
+            }
+            poll();
+        })();
+    </script>
+</body>
+
+</html>

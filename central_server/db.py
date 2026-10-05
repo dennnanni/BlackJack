@@ -1,0 +1,519 @@
+"""Database layer of the central server."""
+from contextlib import contextmanager
+from decimal import ROUND_DOWN, Decimal, InvalidOperation
+import time
+import uuid
+import logging
+
+from sqlalchemy import (Column, Float, ForeignKey, Index, Integer, Numeric, String,
+                        Table, create_engine, func, literal, or_, select, text, update)
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import declarative_base, relationship, sessionmaker
+
+from central_server.config import DATABASE_URL, HEARTBEAT, SEAT_GRACE, SEAT_TAKEOVER
+from shared.messages import BUY_IN_ID, ERROR
+
+# pre ping drops pooled connections that died with a database restart
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+SessionLocal = sessionmaker(bind=engine)
+Base = declarative_base()
+
+logger = logging.getLogger(__name__)
+
+# Advisory lock ids: postgres mutexes shared by all the central replicas
+SCHEMA_LOCK = 1
+TRIMMER_LOCK = 2
+
+IS_POSTGRES = engine.dialect.name == 'postgresql'
+
+
+class ServerFull(Exception):
+    """The game server has no free seat left"""
+
+
+class ServerUnderMaintainance(Exception):
+    """The game server is under maintainance"""
+
+
+class User(Base):
+    __tablename__ = 'user'
+
+    username = Column(String, primary_key=True)
+    password = Column(String, nullable=False)
+    salt = Column(String, nullable=False)
+    balance = Column(Numeric(10, 2), default=0.0)
+
+
+class GameServer(Base):
+    __tablename__ = 'gameserver'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    host = Column(String, nullable=False)
+    port = Column(Integer, nullable=False)
+    capacity = Column(Integer, nullable=False, default=10)
+    last_seen = Column(Float, nullable=False, default=0.0)
+    maintainance_time = Column(Float)
+    # when the server under maintainance reported that nobody is left at its
+    # tables and every result and leave was delivered
+    idle_time = Column(Float)
+    internal_url = Column(String)
+
+class Seat(Base):
+    __tablename__ = 'seat'
+
+    username = Column(String, primary_key=True)
+    server_id = Column(Integer, nullable=False)
+    since = Column(Float, nullable=False)
+
+
+class BuyIn(Base):
+    __tablename__ = 'buyin'
+
+    id = Column(String, primary_key=True)
+    username = Column(String, nullable=False)
+    server_id = Column(Integer, nullable=False)
+    initial = Column(Numeric(10, 2), nullable=False)
+    remaining = Column(Numeric(10, 2), nullable=False)
+    last_updated = Column(Float, nullable=False)
+    closed_at = Column(Float)
+
+    __table_args__ = (
+        Index('idx_open_buy_in', 'username', 'server_id', unique=True,
+              postgresql_where=closed_at.is_(None),
+              sqlite_where=closed_at.is_(None)),
+    )
+
+# keeps the list of rounds that have already been applied to avoid duplicates
+class AppliedRound(Base):
+    __tablename__ = 'applied_round'
+
+    round_id = Column(String, primary_key=True)
+    applied_at = Column(Float, nullable=False)
+
+class UnappliedResult(Base):
+    __tablename__ = 'unapplied_result'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    round_id = Column(String, nullable=False)
+    server_id = Column(Integer, nullable=False)
+    username = Column(String, nullable=False)
+    buy_in_id = Column(String)
+    balance_difference = Column(Numeric(10, 2), nullable=False)
+    reason = Column(String, nullable=False)
+    recorded_at = Column(Float, nullable=False)
+
+
+def _now(session):
+    """Current time from the database clock."""
+    if not IS_POSTGRES:
+        return time.time()
+    return float(session.execute(select(func.extract('epoch', func.now()))).scalar_one())
+
+
+def init_db():
+    """Create the tables using the lock to avoid concurrent creations."""
+    with engine.begin() as conn:
+        if IS_POSTGRES:
+            conn.execute(text('SELECT pg_advisory_xact_lock(:id)'), {'id': SCHEMA_LOCK})
+        Base.metadata.create_all(bind=conn)
+        if IS_POSTGRES:
+            conn.execute(text('ALTER TABLE gameserver '
+                              'ADD COLUMN IF NOT EXISTS maintainance_time DOUBLE PRECISION'))
+            conn.execute(text('ALTER TABLE gameserver '
+                              'ADD COLUMN IF NOT EXISTS internal_url VARCHAR'))
+            conn.execute(text('ALTER TABLE gameserver '
+                              'ADD COLUMN IF NOT EXISTS idle_time DOUBLE PRECISION'))
+
+
+def ping():
+    try:
+        with engine.connect() as conn:
+            conn.execute(text('SELECT 1'))
+        return True
+    except Exception:
+        return False
+
+
+@contextmanager
+def trimmer_lock():
+    """Returns True if this replica got the trimmer lock, False if another
+    replica is trimming right now. The lock is released when the transaction
+    ends or if the connection breaks."""
+    if not IS_POSTGRES:
+        yield True
+        return
+    with engine.begin() as conn:
+        yield conn.execute(text('SELECT pg_try_advisory_xact_lock(:id)'),
+                           {'id': TRIMMER_LOCK}).scalar_one()
+
+
+def add_user(username, password, salt, balance):
+    """False if the username was taken in the meantime by a concurrent sign up."""
+    with SessionLocal() as session:
+        session.add(User(username=username, password=password, salt=salt, balance=balance))
+        try:
+            session.commit()
+        except IntegrityError:
+            return False
+        return True
+
+
+def get_user(username):
+    with SessionLocal() as session:
+        return session.get(User, username)
+
+
+def register_server(host, port, capacity, internal_url=None):
+    """Insert a new game server; returns its assigned id."""
+    with SessionLocal() as session:
+        server = GameServer(host=host, port=port, capacity=capacity,
+                            internal_url=internal_url, last_seen=_now(session))
+        session.add(server)
+        session.commit()
+        return server.id
+
+
+def resurrect_server(server_id, host, port, capacity, internal_url=None):
+    with SessionLocal() as session:
+        server = session.get(GameServer, server_id)
+        if server is None:
+            return None
+        server.host = host
+        server.capacity = capacity
+        server.port = port
+        server.internal_url = internal_url
+        server.last_seen = _now(session)
+        server.maintainance_time = None
+        server.idle_time = None
+        session.commit()
+        return server_id
+
+
+def update_heartbeat(server_id, players):
+    """Record a heartbeat and release the seats of players who left"""
+    with SessionLocal() as session:
+        # lock the server before its seats, must be in the same order as take_seat,
+        # otherwise the two can deadlock
+        server = session.get(GameServer, server_id, with_for_update=True)
+        if server is None:
+            return False
+
+        now = _now(session)
+        server.last_seen = now
+        session.query(Seat).filter(
+            Seat.server_id == server_id,
+            Seat.since < now - SEAT_GRACE,
+            Seat.username.notin_(players)
+        ).delete()
+
+        session.commit()
+        return True
+
+
+def _seats_per_server(session):
+    return dict(session.query(Seat.server_id, func.count())
+                .group_by(Seat.server_id).all())
+
+
+def _state(server, open_buy_ins, alive):
+    """Returns the string representing the state of the server."""
+    if server.maintainance_time is None:
+        return 'active' if alive else 'down'
+    if server.idle_time is None or open_buy_ins > 0:
+        return 'closing'
+    return 'maintainance'
+
+
+def get_alive_servers():
+    with SessionLocal() as session:
+        seats = _seats_per_server(session)
+        servers = session.query(GameServer).filter(
+            GameServer.last_seen >= _now(session) - HEARTBEAT,
+            GameServer.maintainance_time.is_(None) # avoid servers under maintainance
+        ).all()
+        # least loaded first, full servers are skipped
+        available = [s for s in servers if seats.get(s.id, 0) < s.capacity]
+        available.sort(key=lambda s: seats.get(s.id, 0))
+        return available
+
+
+def list_servers():
+    """Every known game server with its load."""
+    with SessionLocal() as session:
+        now = _now(session)
+        servers = session.query(GameServer).order_by(GameServer.id).all()
+        seat_counts = _seats_per_server(session)
+        # server id -> number of buy ins not closed yet
+        open_counts = dict(session.query(BuyIn.server_id, func.count())
+                           .filter(BuyIn.closed_at.is_(None))
+                           .group_by(BuyIn.server_id).all())
+        result = []
+        for server in servers:
+            seats = seat_counts.get(server.id, 0)
+            open_buy_ins = open_counts.get(server.id, 0)
+            alive = server.last_seen >= now - HEARTBEAT
+            result.append({
+                'id': server.id,
+                'host': server.host,
+                'port': server.port,
+                'capacity': server.capacity,
+                'seats': seats,
+                'open_buy_ins': open_buy_ins,
+                'last_seen': server.last_seen,
+                'last_seen_ago': max(0.0, now - server.last_seen),
+                'alive': alive,
+                'state': _state(server, open_buy_ins, alive),
+                'maintainance_since': server.maintainance_time,
+                'idle_since': server.idle_time,
+                'internal_url': server.internal_url,
+            })
+        return result
+
+
+def get_server(server_id):
+    with SessionLocal() as session:
+        return session.get(GameServer, server_id)
+
+
+def get_servers_to_shut_down():
+    """Servers under maintainance that still send heartbeats and did not
+    report that they are idle: they may not have received the shutdown yet."""
+    with SessionLocal() as session:
+        return session.query(GameServer).filter(
+            GameServer.maintainance_time.isnot(None),
+            GameServer.idle_time.is_(None),
+            GameServer.last_seen >= _now(session) - HEARTBEAT
+        ).all()
+
+
+# Note: the opposite of this action is the register
+def set_server_maintainance(server_id):
+    """Take the server out of dispatch. False if the server is unknown. Asking
+    again keeps the time of the first request."""
+    with SessionLocal() as session:
+        server = session.get(GameServer, server_id, with_for_update=True)
+        if server is None:
+            return False
+        if server.maintainance_time is None:
+            server.maintainance_time = _now(session)
+            session.commit()
+        return True
+
+
+def set_server_idle(server_id):
+    """Record that the server under maintainance is idle. None if the server
+    is unknown, False if it is not under maintainance. Asking again keeps the
+    time of the first report."""
+    with SessionLocal() as session:
+        server = session.get(GameServer, server_id, with_for_update=True)
+        if server is None:
+            return None
+        if server.maintainance_time is None:
+            return False
+        if server.idle_time is None:
+            server.idle_time = _now(session)
+            session.commit()
+        return True
+
+
+def remove_dead_servers(retention):
+    with SessionLocal() as session:
+        has_open_buy_in = session.query(BuyIn).filter(
+            BuyIn.server_id == GameServer.id, 
+            BuyIn.closed_at.is_(None)
+        ).exists()
+        deleted = session.query(GameServer).filter(
+            GameServer.last_seen <= _now(session) - retention,
+            GameServer.maintainance_time.is_(None), # do not remove if under maintainance
+            ~has_open_buy_in
+        ).delete(synchronize_session=False)
+        session.commit()
+        return deleted
+
+
+def take_seat(username, server_id):
+    """Add new player seat if player not seated or update the existing one if
+    game server not available and takeover expired. Enforces the capacity check."""
+    already_seated = ('You are already seated at a table: leave it '
+                      '(or wait a few seconds) before playing again')
+    with SessionLocal() as session:
+        now = _now(session)
+        server = session.get(GameServer, server_id, with_for_update=True)
+        if server is None:
+            raise ValueError('Unknown game server')
+        if server.maintainance_time is not None:
+            raise ServerUnderMaintainance()
+
+        seat = session.get(Seat, username, with_for_update=True)
+        if seat is not None and seat.server_id == server_id:
+            seat.since = now
+            session.commit()
+            return
+
+        if seat is not None:
+            owner = session.get(GameServer, seat.server_id)
+            if owner is not None and owner.last_seen >= now - SEAT_TAKEOVER:
+                raise ValueError(already_seated)
+
+        taken = session.query(Seat).filter(Seat.server_id == server_id).count()
+        if taken >= server.capacity:
+            raise ServerFull()
+
+        if seat is None:
+            session.add(Seat(username=username, server_id=server_id, since=now))
+        else:
+            seat.server_id = server_id
+            seat.since = now
+        try:
+            session.commit()
+        except IntegrityError:
+            # a concurrent dispatch seated the same player first
+            raise ValueError(already_seated)
+
+
+def create_buy_in(username, server_id, buy_in):
+    """Creates the buy in row reserving an amount from the user balance"""
+    with SessionLocal() as session:
+        user = session.get(User, username, with_for_update=True)
+        if user is None:
+            raise ValueError('Unknown user')
+
+        try:
+            amount = Decimal(str(buy_in))
+        except:
+            raise ValueError('Buy in amount is not a valid number')
+        
+        if amount <= 0:
+            raise ValueError('Buy in amount cannot be negative or zero')
+        if amount > user.balance:
+            raise ValueError('User buy in amount cannot exceed user balance')
+
+        id = str(uuid.uuid4())
+        user.balance -= amount # reserves the buy in from the balance
+        session.add(BuyIn(id=id, username=username, server_id=server_id,
+                          initial=amount, remaining=amount,
+                          last_updated=_now(session)))
+        try:
+            session.commit()
+        except:
+            # if it ends up here the unique index has raised
+            session.rollback()
+            raise ValueError('You already have an open buy in on that table')
+        return id, amount
+
+
+def _settle(session, buy_in):
+    """Hand what is left of a buy in back to its player."""
+    remaining = buy_in.remaining
+    if remaining < 0:
+        logger.error('Buy in remaining amount is negative, capping it to zero')
+        remaining = 0
+    session.execute(
+        update(User)
+        .where(User.username == buy_in.username)
+        .values(balance=User.balance + remaining))
+    now = _now(session)
+    buy_in.closed_at = now
+    buy_in.last_updated = now
+
+
+def close_buy_in(server_id, buy_in_ids):
+    """Closes the buy ins of the given ids"""
+    closed = []
+    with SessionLocal() as session:
+        for id in buy_in_ids:
+            buy_in = session.get(BuyIn, id, with_for_update=True)
+            if buy_in is None:
+                closed.append(id)
+                continue
+            if buy_in.server_id != server_id:
+                continue
+            if buy_in.closed_at is None:
+                _settle(session, buy_in)
+            closed.append(id)
+        session.commit()
+    return closed
+
+
+def close_abandoned_buy_ins(grace):
+    """Settle open buy ins that no game server is holding any more"""
+    with SessionLocal() as session:
+        now = _now(session)
+        seat_held = session.query(Seat).filter(
+            Seat.username == BuyIn.username,
+            Seat.server_id == BuyIn.server_id).exists()
+        server_alive = session.query(GameServer).filter(
+            GameServer.id == BuyIn.server_id,
+            GameServer.last_seen >= now - SEAT_TAKEOVER).exists()
+        abandoned = session.query(BuyIn).filter(
+            BuyIn.closed_at.is_(None),
+            BuyIn.last_updated < now - grace,
+            or_(~seat_held, ~server_alive)).with_for_update().all()
+
+        closed = [buy_in.id for buy_in in abandoned]
+        for buy_in in abandoned:
+            _settle(session, buy_in)
+        session.commit()
+    return closed
+
+def _get_buy_in(session, server_id, result):
+    buy_in = session.get(BuyIn, result.buy_in_id, with_for_update=True)
+    if buy_in is None:
+        return None, 'Unknown buy in'
+    if buy_in.server_id != server_id:
+        return None, 'Buy in belong to another server'
+    if buy_in.username != result.username:
+        return None, 'Buy in belongs to another user'
+    return buy_in, None
+
+
+def apply_round(round_id, server_id, results):
+    """Apply each result's balance change to its player exactly once."""
+    with SessionLocal() as session:
+        if session.get(AppliedRound, round_id) is not None:
+            logger.info(f'Round {round_id} from server {server_id} already applied, skipping')
+            return []
+        now = _now(session)
+        rejected = []
+        for result in results:
+            buy_in, reason = _get_buy_in(session, server_id, result)
+            if buy_in is None:
+                session.add(UnappliedResult(
+                    round_id = round_id, server_id=server_id, 
+                    username=result.username, buy_in_id=result.buy_in_id,
+                    balance_difference=Decimal(str(result.balance_difference)),
+                    reason=reason, recorded_at=now
+                ))
+                rejected.append({BUY_IN_ID: result.buy_in_id, ERROR: reason})
+                logger.error(f'Server {server_id} reported a result for {result.username} with no buy in in that server')
+                continue
+
+            difference = Decimal(str(result.balance_difference))
+            # cap the win if something went wrong and the table let the player stake more than available
+            if difference > buy_in.remaining:
+                logger.error(f'Server {server_id} reported a win of {difference} for '
+                            f'{result.username} on a buy in holding {buy_in.remaining}')
+                difference = buy_in.remaining
+            # cap to the max loss of the table
+            charge = max(difference, -buy_in.remaining)
+
+            # applies the difference directly on the user balance
+            if buy_in.closed_at is not None:
+                session.execute(
+                    update(User)
+                    .where(User.username == result.username)
+                    .values(balance=User.balance + charge))
+
+            buy_in.remaining = buy_in.remaining + charge
+            buy_in.last_updated = now
+
+        session.add(AppliedRound(round_id=round_id, applied_at=now))
+        session.commit()
+        return rejected
+
+def prune_old_rounds(max_age):
+    """Drop applied rounds entries old enough that no retry can still happen"""
+    with SessionLocal() as session:
+        session.query(AppliedRound).filter(
+            AppliedRound.applied_at < _now(session) - max_age).delete()
+        session.commit()

@@ -1,33 +1,34 @@
-[project]
+[tool.poetry]
 name = "blackjack"
 version = "0.1.0"
 description = ""
-authors = [
-    {name = "Denise Nanni",email = "denise.nanni1@gmail.com"}
-]
+authors = [ "Denise Nanni <denise.nanni1@gmail.com>" ]
 readme = "README.md"
-requires-python = ">=3.12"
-dependencies = [
-    "sqlalchemy (>=2.0.40,<3.0.0)",
-    "psycopg2 (>=2.9.10,<3.0.0)",
-    "flask (>=3.1.0,<4.0.0)",
-    "flask-socketio (>=5.5.1,<6.0.0)"
+packages = [
+    { include = "shared" },
+    { include = "central_server"},
+    { include = "game_server" },
 ]
+
+[tool.poetry.dependencies]
+python = ">=3.12"
+sqlalchemy = ">=2.0.40,<3.0.0"
+psycopg2-binary = ">=2.9.10,<3.0.0"
+flask = ">=3.1.0,<4.0.0"
+flask-socketio = ">=5.5.1,<6.0.0"
+requests = "^2.32.3"
+flask-login = "^0.6.3"
+python-dotenv = "^1.1.0"
+pyjwt = "^2.10.1"
 
 
 [build-system]
 requires = ["poetry-core>=2.0.0,<3.0.0"]
 build-backend = "poetry.core.masonry.api"
 
-[tool.poetry]
-packages = [
-    { include = "src", from = "game_server" },    
-    { include = "database_interface", from = "main_server" }     
-]
-
 [tool.poetry.scripts]
-database_interface = "database_interface.main:main"
-game_server = "game_server.src.main:main"
+central = "central_server.main:main"
+game_server = "game_server.main:main"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.3.5"
