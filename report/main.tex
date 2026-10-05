@@ -490,42 +490,44 @@ In contrast, most of the game server's state is in-memory only, with the server 
 Players and the administrator interact with the central server through commands (register, log in, play, put a server under maintenance) and queries (the balance, the list of servers), while the game servers mostly send it events: a server registered, a round finished, a player left, the server is idle, together with the periodic heartbeat that reports who is still seated. The only command flowing the other way is the shutdown sent to the servers under maintenance.
 The interaction between the players and the game server happens with commands on one side (e.g., mid-round actions), and events on the other (e.g., round started, bets closed, turn passed).
 
-\begin{itemize}
-  \item which \textbf{domain entities} are there?
-  %
-  \begin{itemize}
-    \item e.g.~\emph{users}, \emph{products}, \emph{orders}, \emph{etc.}
-  \end{itemize}
+\TODO{Put class diagrams of the central server and the game servers here}
+
+% \begin{itemize}
+%   \item which \textbf{domain entities} are there?
+%   %
+%   \begin{itemize}
+%     \item e.g.~\emph{users}, \emph{products}, \emph{orders}, \emph{etc.}
+%   \end{itemize}
   
-  \item how do \emph{domain entities} \textbf{map to} \emph{infrastructural components}?
-  %
-  \begin{itemize}
-    \item e.g.~state of a video game on central server, while inputs/representations on clients
-    \item e.g.~where to store messages in an IM app? for how long?
-  \end{itemize}
+%   \item how do \emph{domain entities} \textbf{map to} \emph{infrastructural components}?
+%   %
+%   \begin{itemize}
+%     \item e.g.~state of a video game on central server, while inputs/representations on clients
+%     \item e.g.~where to store messages in an IM app? for how long?
+%   \end{itemize}
 
-  \item which \textbf{domain events} are there?
-  %
-  \begin{itemize}
-    \item e.g.~\emph{user registered}, \emph{product added to cart}, \emph{order placed}, \emph{etc.}
-  \end{itemize}
+%   \item which \textbf{domain events} are there?
+%   %
+%   \begin{itemize}
+%     \item e.g.~\emph{user registered}, \emph{product added to cart}, \emph{order placed}, \emph{etc.}
+%   \end{itemize}
   
-  \item which sorts of \textbf{messages} are exchanged?
-  %
-  \begin{itemize}
-    \item e.g.~\emph{commands}, \emph{events}, \emph{queries}, \emph{etc.}
-  \end{itemize}
+%   \item which sorts of \textbf{messages} are exchanged?
+%   %
+%   \begin{itemize}
+%     \item e.g.~\emph{commands}, \emph{events}, \emph{queries}, \emph{etc.}
+%   \end{itemize}
 
-  \item what information does the \textbf{state} of the system comprehend
-  %
-  \begin{itemize}
-    \item e.g.~\emph{users' data}, \emph{products' data}, \emph{orders' data}, \emph{etc.}
-  \end{itemize}
-\end{itemize}
+%   \item what information does the \textbf{state} of the system comprehend
+%   %
+%   \begin{itemize}
+%     \item e.g.~\emph{users' data}, \emph{products' data}, \emph{orders' data}, \emph{etc.}
+%   \end{itemize}
+% \end{itemize}
 
-\begin{quote}
-Class diagram are welcome here
-\end{quote}
+% \begin{quote}
+% Class diagram are welcome here
+% \end{quote}
 
 \subsection{Interaction}\label{interaction}
 
