@@ -4,6 +4,7 @@
 \usepackage{url}
 \usepackage{natbib}
 \usepackage{graphicx}
+\usepackage{comment}
 \usepackage[textsize=tiny]{todonotes}
 \newcommand{\TODO}[1]{\todo[color=orange!40, inline]{\textbf{TODO} #1}}
 \newcommand{\TODOside}[1]{\todo[color=orange!40]{\textbf{TODO} #1}}
@@ -577,47 +578,96 @@ State diagrams are welcome here
 
 \subsection{Data and Consistency Issues}\label{data-and-consistency-issues}
 
-% moved from ds-features, to be reworked
-The balance is eventually consistent, and users are warned it may take a moment to update, so a stale number doesn't look like lost money.
-One single instance of the database is shared across central server replicas, thus requiring coordination to handle race conditions.
-For example, different dispatched may contend the player seat, player balance may be divided into multiple buy-ins, and the game server may post the results to different replicas over the lifespan of the buy-in and the seat.
-The coordination is implemented through locks on the database. Rounds posts are parallel operations, that are handled at database level.
-To ensure the concept of time is shared between replicas, therefore making leases handling equivalent, the database internal time is used. Database replication would further complicate time management.
 
-\begin{itemize}
-  \item Is there any data that needs to be stored?
-  %
-  \begin{itemize}
-    \item \emph{what} data? \emph{where}? \emph{why}?
-  \end{itemize}
-  
-  \item how should \emph{persistent data} be \textbf{stored}?
-  %
-  \begin{itemize}
-    \item e.g.~relations, documents, key-value, graph, etc.
-    \item why?
-  \end{itemize}
-  
-  \item Which components perform queries on the database?
-  %
-  \begin{itemize}
-    \item \emph{when}? \emph{which} queries? \emph{why}?
-    \item concurrent read? concurrent write? why?
-  \end{itemize}
-  
-  \item Is there any data that needs to be shared between components?
-  %
-  \begin{itemize}
-    \item \emph{why}? \emph{what} data?
-  \end{itemize}
-\end{itemize}
+%The balance is eventually consistent, and users are warned it may take a moment to update, so a stale number doesn't look like lost money.
+%One single instance of the database is shared across central server replicas, thus requiring coordination to handle race conditions.%
+%For example, different dispatched may contend the player seat, player balance may be divided into multiple buy-ins, and the game server may post the results to different replicas over the lifespan of the buy-in and the seat.
+%The coordination is implemented through locks on the database. Rounds posts are parallel operations, that are handled at database level.
+%To ensure the concept of time is shared between replicas, therefore making leases handling equivalent, the database internal time is used. Database replication would further complicate time management.
+
+
+The central server stores player accounts and balances, buy-ins, seats, the game-server registry, applied round identifiers, 
+and results that could not be matched to a valid buy-in. The data is relational, and the shared database is the authoritative 
+record of players’ money. Transactions make transfers between balances and buy-ins atomic, while constraints prevent duplicate 
+usernames, more than one open buy-in per player, and duplicate round identifiers.
+
+Each game server persists its identifier, the buy-ins of its seated players, and undelivered results and pending leaves 
+in a local outbox. After a restart, buy-ins belonging to previously seated players are treated 
+as pending leaves so they can be settled by the central server.
+
+Central-server replicas are stateless and use the shared database as their coordination point. Operations such as 
+dispatching players, processing results and leaves, updating heartbeats, and settling abandoned buy-ins use database transactions. 
+Concurrent writes, such as competing seat reservations or retried results, are handled in transactions that
+lock the affected rows, in the same order where two paths touch the same ones; unique constraints prevent duplicate operations, 
+including applying a round twice.
+
+Money moves through buy-ins. When a player is dispatched, the central server reserves a buy-in by subtracting it 
+from the player’s balance, then sends its identifier and amount to the game server in a signed join token. 
+For each round, the game server reports the balance change against that buy-in. When the buy-in is closed, the central 
+server credits the player’s account with the remaining amount. 
+The balance shown on the home page is therefore the amount outside the table; it is updated with the table’s remaining funds 
+when the player leaves.
+
+Results and leave notifications are delivered asynchronously. The outbox retries undelivered messages until they are acknowledged. 
+For each result, the central server records the round identifier and applies the corresponding balance change in 
+the same transaction, ensuring that retries do not apply an accepted result more than once. Results that cannot be 
+matched to a valid buy-in are recorded separately for troubleshooting.
+
+% \begin{itemize}
+%   \item Is there any data that needs to be stored?
+%   %
+%   \begin{itemize}
+%     \item \emph{what} data? \emph{where}? \emph{why}?
+%   \end{itemize}
+
+%   \item how should \emph{persistent data} be \textbf{stored}?
+%   %
+%   \begin{itemize}
+%     \item e.g.~relations, documents, key-value, graph, etc.
+%     \item why?
+%   \end{itemize}
+
+%   \item Which components perform queries on the database?
+%   %
+%   \begin{itemize}
+%     \item \emph{when}? \emph{which} queries? \emph{why}?
+%     \item concurrent read? concurrent write? why?
+%   \end{itemize}
+
+%   \item Is there any data that needs to be shared between components?
+%   %
+%   \begin{itemize}
+%     \item \emph{why}? \emph{what} data?
+%   \end{itemize}
+% \end{itemize}
 
 \subsection{Fault-Tolerance}\label{fault-tolerance}
 
+Central-server replicas are interchangeable: when one fails, the remaining replicas keep handling requests, although 
+overall capacity is reduced. The shared database and the client-side proxy remain single points of failure.
+
+Game servers periodically report the players seated at their tables. The central server uses these heartbeats to track server 
+availability. If a player is no longer reported, the central server waits through a grace period before releasing the seat, 
+allowing time for a newly dispatched player to join. If a game server fails and does not restart, the central server eventually 
+releases its seats, closes buy-ins that are no longer held by a live server, and returns the remaining amounts to the players’ balances.
+
+A game-server failure loses its in-memory table state. Any interrupted round is voided and not resumed; the player is warned 
+that the server is unavailable and is disconnected. If the game server restarts, it sends pending outbox messages and 
+reports the buy-ins of its previously seated players as pending leaves so that they can be settled.
+If the central server is unreachable, game servers cycle through its replicas and retry pending results and leave notifications. 
+The round in progress is played to its end and its result is stored in the outbox, but no new round starts until communication 
+is restored. 
+
+The system prioritizes consistency and correctness over availability. 
+A central-server communication failure does not interrupt a completed round, since its result remains in the outbox for retry, 
+but it prevents the player from starting another round. Failure transparency is therefore partial: a game-server failure 
+voids the active round, while a temporary central-server failure delays result processing.
+\begin{comment}
 % moved from ds-features, to be reworked
 The system values consistency and correctness more than availability. The game servers do not resume rounds after failures to avoid consistency risks, the user is warned the server is not responding and is kicked out. Bets of interrupted rounds are voided, so no money is lost, while results updates are persisted and are sent as soon as possible. Due to replication and the statelessness of the central servers, a crash of multiple instances only affects the load of the remaining. All game servers cycle the central servers as a failover mechanism and stop starting new rounds if none is reachable. The shared database and the client-side proxy are the single point of failure of the system. All the services are restarted upon crashes, in particular the game servers, as they may still have some unposted results.
-Failure transparency is partial. If something goes wrong during a round, the user doesn't notice and the round finishes normally. If the central server can't be reached when the round ends, the user is warned and can't start a new round.
+Failure transparency is partial. A central-server communication failure at the end of a round does not interrupt the game: the result is persisted in the outbox and retried, but the user is warned and cannot start another round until the central server is reachable. A game-server failure interrupts its in-memory table state, so the round is voided and cannot be resumed.
 Data loss or corruption is prevented by combining at-least-once delivery with at-most-once recording, resulting in an exacly-once result application. The unapplied results ledger allows for troubleshooting when some results are rejected.
+
 
 \begin{itemize}
   \item Is there any form of data \textbf{replication} / federation / sharing?
@@ -638,6 +688,7 @@ Data loss or corruption is prevented by combining at-least-once delivery with at
     \item \emph{what} happens when a component fails? \emph{why}? \emph{how}?
   \end{itemize}
 \end{itemize}
+\end{comment}
 
 \subsection{Availability}\label{availability}
 
