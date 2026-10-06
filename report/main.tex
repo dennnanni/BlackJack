@@ -589,7 +589,7 @@ State diagrams are welcome here
 The central server stores player accounts and balances, buy-ins, seats, the game-server registry, applied round identifiers, 
 and results that could not be matched to a valid buy-in. The data is relational, and the shared database is the authoritative 
 record of players’ money. Transactions make transfers between balances and buy-ins atomic, while constraints prevent duplicate 
-usernames, more than one open buy-in per player, and duplicate round identifiers.
+usernames, more than one open buy-in per player and game server, and duplicate round identifiers.
 
 Each game server persists its identifier, the buy-ins of its seated players, and undelivered results and pending leaves 
 in a local outbox. After a restart, buy-ins belonging to previously seated players are treated 
@@ -747,55 +747,81 @@ Traffic travels over unsecured connection, therefore the system is prone to repl
 
 \section{Implementation}\label{implementation}
 
-Please report here all the implementation (technology-dependent) choices you made while implementing your design.
 
-\begin{quote}
-  If you run out of time for this project, you may consider leaving some aspect unimplemented, 
-  and simply discuss how you would have implemented them.
-  %
-  In this case, better would be to discuss unimplemented features in \cref{future-works}.
-\end{quote}
+\paragraph{HTTP}
+Used for the communication between the browsers and the servers, and between the game servers and the central server, handling requests for fetching pages and sending data.
 
-% moved from ds-features, to be reworked
-Communication happens with REST API and JSON data format between the servers, while WebSockets are used to communicate to the browser.
+\paragraph{REST API}
+The central server exposes the endpoints used by the game servers, grouped under \texttt{/api/servers} (\texttt{register}, \texttt{heartbeat}, \texttt{results}, 
+\texttt{leave}, \texttt{empty}), while each game server exposes \texttt{/api/shutdown}, which only the central server can call.
 
-\begin{itemize}
-  \item which \textbf{network protocols} to use?
-  %
-  \begin{itemize}
-    \item e.g.~UDP, TCP, HTTP, WebSockets, gRPC, XMPP, AMQP, MQTT, etc.
-  \end{itemize}
-  
-  \item how should \emph{in-transit data} be \textbf{represented}?
-  %
-  \begin{itemize}
-    \item e.g.~JSON, XML, YAML, Protocol Buffers, etc.
-  \end{itemize}
-  
-  \item how should \emph{databases} be \textbf{queried}?
-  %
-  \begin{itemize}
-    \item e.g.~SQL, NoSQL, etc.
-  \end{itemize}
-  
-  \item how should components be \emph{authenticated}?
-  %
-  \begin{itemize}
-    \item e.g.~OAuth, JWT, etc.
-  \end{itemize}
+\paragraph{JSON}
+Data exchanged between the servers is represented in JSON, due to its readability and its native support in Python and in the browser.
+The names of the fields and the types of the messages are defined once in a \texttt{shared} package imported by both 
+kinds of server, so that the wire contract cannot diverge.
 
-  \item how should components be \emph{authorized}?
-  %
-  \begin{itemize}
-    \item e.g.~RBAC, ABAC, etc.
-  \end{itemize}
-\end{itemize}
+\paragraph{WebSockets}
+The communication between a browser and its game server during a game (bets, actions and the broadcast of the table events) uses WebSockets, 
+through Socket.IO, since the server must push events to the players without them asking.
+
+\paragraph{SQL}
+The central server data is relational and queried with SQL, through the SQLAlchemy ORM on a PostgreSQL database.
+The outbox of each game server is a local SQLite file, queried with plain SQL statements.
+
+\paragraph{JWT}
+Authentication between components and the player admission to a game server rely on JSON Web Tokens signed with HS256 using a secret shared by the servers.
+Three kinds of token exist, told apart by the \texttt{typ} claim: the \emph{server} token, issued by a game server on each call to the central server; 
+the \emph{central} token, issued by the central server for its shutdown commands; and the \emph{join} token, issued by the central server when a player is dispatched.
+All of them are short-lived (60 seconds for the first two, 120 seconds for the join token), and the last two are bound to the identifier of the server they are meant for.
+The join token also carries the username and the buy-in of the player.
+
+\paragraph{Access control}
+Authorization is role-based, with three roles: \emph{players}, \emph{administrators} and \emph{game servers}.
+Players and administrators log in with a username and a password and are tracked by a signed session cookie; the cookie of the administrator carries an 
+explicit flag that the maintenance routes check.
+A game server is recognised by presenting a valid server token, and the central server checks it on every API call.
+A player is authorized to a table only by presenting the join token for that very server.
+Passwords are stored as salted hashes.
 
 \subsection{Technological details}\label{technological-details}
 
-\begin{itemize}
-  \item any particular \emph{framework} / \emph{technology} being exploited goes here
-\end{itemize}
+\paragraph{Python and Flask}
+Both the central server and the game servers are written in Python using Flask, with blueprints to separate the player pages, 
+the API for the servers and the administration panel.
+Flask-Login manages the player session on the central server, and Flask-SocketIO provides the WebSocket layer of the game servers.
+Dependencies are managed with Poetry, and the two servers are installed as the executables \texttt{central} and \texttt{game\_server}.
+
+\paragraph{PostgreSQL}
+PostgreSQL 17 stores the whole state of the central server, which is therefore stateless.
+Advisory locks, shared by all the replicas, ensure that the schema is created by one replica at a time and that only one replica at a time runs the periodic cleanup.
+Partial unique indexes enforce at most one open buy-in per player and server, and the primary key on the round identifier discards duplicate results.
+Time-based decisions (leases and grace periods) use the clock of the database, so that all the replicas agree on it.
+
+\paragraph{SQLite}
+Each game server keeps its outbox in a SQLite file, which needs no additional process and survives restarts.
+It holds the identifier assigned by the central server, the results not yet delivered, the buy-ins of the seated players and the pending leaves.
+Every operation is a single transaction.
+
+\paragraph{Threads}
+Each game server runs one thread per table for the game loop, plus a thread sending the heartbeats and another one draining the outbox, which retries until the central server acknowledges.
+The central server runs the cleanup (the \emph{trimmer}) and the sender of the shutdown commands as background threads, in addition to the threads handling the requests.
+
+\paragraph{Docker}
+The system is built and run with Docker and Docker Compose, which start a container for each component: the database, the two central replicas, the proxy and the two game servers.
+Each game server mounts a volume for its outbox, and the database mounts a volume for its data, so that both survive the restart of the containers.
+The central replicas and the game servers are restarted automatically, and the central replicas wait for the database to pass its health check before starting.
+
+\paragraph{NGINX}
+An NGINX reverse proxy is the single entry point of the browsers to the central replicas, and balances the requests among them.
+A replica that fails is excluded for a few seconds and then tried again, and addresses are re-resolved through the Docker DNS since a restarted replica may change its address.
+A request is moved to the other replica only if the first one never received it.
+
+\paragraph{Requests}
+Game servers call the central server with the Requests library, with a timeout, cycling through the list of replicas on failure; each game server starts randomly chosen a replica to spread the load.
+
+\paragraph{Pytest}
+The automated tests of both servers are written with Pytest (see \cref{automatic-testing}).
+
 
 \section{Validation}\label{validation}
 
