@@ -586,26 +586,26 @@ State diagrams are welcome here
 %To ensure the concept of time is shared between replicas, therefore making leases handling equivalent, the database internal time is used. Database replication would further complicate time management.
 
 
-The central server stores player accounts and balances, buy-ins, seats, the game-server registry, applied round identifiers, 
-and results that could not be matched to a valid buy-in. The data is relational, and the shared database is the authoritative 
-record of players’ money. Transactions make transfers between balances and buy-ins atomic, while constraints prevent duplicate 
+The central server records player accounts and balances, buy-ins, seats, the game-server registry, applied round identifiers, 
+and results that could not be associated with a valid buy-in. The data is relational, and the shared database is the source of truth 
+for players’ money. Transactions make transfers between balances and buy-ins atomic, while constraints disallow duplicate 
 usernames, more than one open buy-in per player and game server, and duplicate round identifiers.
 
-Each game server persists its identifier, the buy-ins of its seated players, and undelivered results and pending leaves 
+Each game server stores its identifier, the buy-ins of its seated players, and unacknowledged results and pending leaves 
 in a local outbox. After a restart, buy-ins belonging to previously seated players are treated 
-as pending leaves so they can be settled by the central server.
+as pending leaves so they can be processed by the central server.
 
-Central-server replicas are stateless and use the shared database as their coordination point. Operations such as 
-dispatching players, processing results and leaves, updating heartbeats, and settling abandoned buy-ins use database transactions. 
-Concurrent writes, such as competing seat reservations or retried results, are handled in transactions that
-lock the affected rows, in the same order where two paths touch the same ones; unique constraints prevent duplicate operations, 
+Central-server replicas are stateless and use the shared database to coordinate their operations. Actions such as 
+dispatching players, processing results and leaves, updating heartbeats, and settling abandoned buy-ins are performed within database transactions. 
+Concurrent updates, such as competing seat reservations or retried results, are handled in transactions that
+lock the affected rows in the same order whenever two operation paths access the same rows; unique constraints prevent duplicate operations, 
 including applying a round twice.
 
-Money moves through buy-ins. When a player is dispatched, the central server reserves a buy-in by subtracting it 
+Money is transferred through buy-ins. When a player is dispatched, the central server reserves a buy-in by deducting it 
 from the player’s balance, then sends its identifier and amount to the game server in a signed join token. 
 For each round, the game server reports the balance change against that buy-in. When the buy-in is closed, the central 
 server credits the player’s account with the remaining amount. 
-The balance shown on the home page is therefore the amount outside the table; it is updated with the table’s remaining funds 
+The balance shown on the home page is therefore the amount held outside the table; it is updated with the table’s remaining funds 
 when the player leaves.
 
 Results and leave notifications are delivered asynchronously. The outbox retries undelivered messages until they are acknowledged. 
@@ -643,25 +643,25 @@ matched to a valid buy-in are recorded separately for troubleshooting.
 
 \subsection{Fault-Tolerance}\label{fault-tolerance}
 
-Central-server replicas are interchangeable: when one fails, the remaining replicas keep handling requests, although 
-overall capacity is reduced. The shared database and the client-side proxy remain single points of failure.
+Central-server replicas are substitutable: when one fails, the remaining replicas continue processing requests, although 
+the available capacity decreases. The shared database and the reverse proxy remain single points of failure.
 
-Game servers periodically report the players seated at their tables. The central server uses these heartbeats to track server 
+Game servers send periodic reports of the players seated at their tables. The central server uses these heartbeats to monitor server 
 availability. If a player is no longer reported, the central server waits through a grace period before releasing the seat, 
-allowing time for a newly dispatched player to join. If a game server fails and does not restart, the central server eventually 
-releases its seats, closes buy-ins that are no longer held by a live server, and returns the remaining amounts to the players’ balances.
+giving a newly dispatched player time to join. If a game server fails and remains offline, the central server eventually 
+releases its seats, closes buy-ins that are no longer held by an active server, and returns the remaining amounts to the players’ balances.
 
-A game-server failure loses its in-memory table state. Any interrupted round is voided and not resumed; the player is warned 
-that the server is unavailable and is disconnected. If the game server restarts, it sends pending outbox messages and 
-reports the buy-ins of its previously seated players as pending leaves so that they can be settled.
-If the central server is unreachable, game servers cycle through its replicas and retry pending results and leave notifications. 
-The round in progress is played to its end and its result is stored in the outbox, but no new round starts until communication 
+A game-server failure causes its in-memory table state to be lost. Any interrupted round is voided and not resumed; the player is notified 
+that the server is unavailable and is disconnected. If the game server restarts, it delivers queued outbox messages and 
+reports the buy-ins of its previously seated players as pending leaves so that the central server can settle them.
+If the central server is unavailable, game servers try its replicas in rotation and retry pending results and leave notifications. 
+The active round can finish and its result is stored in the outbox, but no subsequent round starts until communication 
 is restored. 
 
-The system prioritizes consistency and correctness over availability. 
-A central-server communication failure does not interrupt a completed round, since its result remains in the outbox for retry, 
-but it prevents the player from starting another round. Failure transparency is therefore partial: a game-server failure 
-voids the active round, while a temporary central-server failure delays result processing.
+The system gives priority to consistency and correctness over availability. 
+A communication failure with the central server does not interrupt a completed round, since its result remains in the outbox for retry, 
+but it prevents the player from starting another round. Failure transparency is therefore limited: a game-server failure 
+voids the active round, while a temporary central-server failure delays the processing of results.
 \begin{comment}
 % moved from ds-features, to be reworked
 The system values consistency and correctness more than availability. The game servers do not resume rounds after failures to avoid consistency risks, the user is warned the server is not responding and is kicked out. Bets of interrupted rounds are voided, so no money is lost, while results updates are persisted and are sent as soon as possible. Due to replication and the statelessness of the central servers, a crash of multiple instances only affects the load of the remaining. All game servers cycle the central servers as a failover mechanism and stop starting new rounds if none is reachable. The shared database and the client-side proxy are the single point of failure of the system. All the services are restarted upon crashes, in particular the game servers, as they may still have some unposted results.
@@ -717,6 +717,21 @@ The game servers can be scaled at run-time thanks to the registration mechanism,
 
 \subsection{Security}\label{security}
 
+Players and administrators log in to the central server with a username and a password, and their sessions are then maintained through a signed cookie.
+The central server and the game servers verify each other with short-lived tokens signed using a shared secret: possession of the secret proves that a component is one of the servers.
+Every call between the servers includes such a token.
+
+Authorization is based on roles. Players can only view their own balance and request dispatch; administrators can only access the maintenance panel; 
+game servers can only send heartbeats, results and leaves, and the central server accepts results and leaves only for the buy-ins it opened on that specific server. 
+Only the central server can shut down a game server.
+A player can join a table only through the join token issued at dispatch, which is tied to one game server and one buy-in, and allows the player to take a seat only once.
+The player's identity and the funds brought to the table are always taken from this token, never from the browser. 
+The central server also limits each reported win to the amount held in the buy-in, reducing the potential impact of a faulty game server.
+
+Tokens are signed with HS256 (HMAC with SHA-256), which ensures their integrity and authenticity, while passwords are stored as salted hashes. 
+The short token expiry and one-time use of the join token limit the reuse of an intercepted token.
+
+\begin{comment}
 % moved from ds-features, to be reworked
 Tokens signed with a shared secret are used to implement authentication and authorization in the system. The game and central servers share the symmetric key, the knowledge of the secret is what authenticates the entities. Authorization for servers is implemented by presenting the token on each request.
 Users log in with their username and password, and the central server issues a join token when they want to play. This token authorizes them to the dispatched game server. The identity of the users and their money always come from the token, which is created and signed by a trusted source, instead of trusting the users.
@@ -744,6 +759,7 @@ Traffic travels over unsecured connection, therefore the system is prone to repl
     \item e.g.~data encryption, etc.
   \end{itemize}
 \end{itemize}
+\end{comment}
 
 \section{Implementation}\label{implementation}
 
