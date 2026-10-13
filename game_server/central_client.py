@@ -14,7 +14,7 @@ from game_server.config import (CAPACITY, CENTRAL_URLS, INTERNAL_URL, LEASE_TIME
                                 SHARED_SECRET)
 from shared.messages import CAPACITY as CAPACITY_FIELD
 from shared.messages import INTERNAL_URL as INTERNAL_URL_FIELD
-from shared.messages import (BUY_INS, HOST, PLAYERS, PORT, RESULTS, ROUND_ID,
+from shared.messages import (BUY_INS, CLOSED, HOST, PLAYERS, PORT, RESULTS, ROUND_ID,
                              SERVER_ID, SETTLED, TYP, TYP_SERVER)
 
 SERVER_TOKEN_TTL = 60
@@ -74,10 +74,15 @@ class CentralClient:
             print(f'[central] registration failed: {e}')
             return False
 
-    def heartbeat(self, players):
+    def heartbeat(self, players, buy_ins, drop_closed):
+        """Central answers with the buy-ins it closed meanwhile: drop_closed
+        unseats their players before the lease is renewed, so that no table
+        starts a round on them."""
         try:
-            response = self._post('/api/servers/heartbeat', {PLAYERS: players})
+            response = self._post('/api/servers/heartbeat',
+                                  {PLAYERS: players, BUY_INS: buy_ins})
             if response.ok:
+                drop_closed(response.json().get(CLOSED, []))
                 # Only a 200 renews the lease. A 404 means central answered but
                 # no longer holds our players' seats, which is just as bad as
                 # not reaching it.

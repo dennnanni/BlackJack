@@ -26,6 +26,12 @@ def seated_players():
     return list(user_map)
 
 
+def held_buy_ins():
+    """Buy-ins of the seated players. Central answers the heartbeat with the
+    ones it closed meanwhile."""
+    return [user.buy_in_id for user in user_map.values() if user.buy_in_id]
+
+
 def tables_idle():
     """Nobody seated and no table in the middle of a round."""
     return not user_map and not any(loop.running for loop in table_game_map.values())
@@ -33,6 +39,11 @@ def tables_idle():
 
 def room(table):
     return f"table-{table.id}"
+
+
+def player_room(username):
+    """Room of the sockets of one player, to tell them alone they are out."""
+    return f"player-{username}"
 
 
 def can_take_seat(buy_in_id, join_exp, boot_id):
@@ -74,6 +85,31 @@ def leave_table(username):
             game_loop.turn_done_event.set()   # don't hold the table for them
         socketio.emit('player_left', {'user': username}, to=room(table))
     unseat(username, close_buy_in=not stake_in_play)
+
+
+def drop_closed_buy_ins(buy_in_ids):
+    """Central closed these buy-ins and gave their money back to the players,
+    who must not play on them any more. They are sent back to central with no
+    leave, since there is nothing left to close."""
+    closed = set(buy_in_ids)
+    for user in [u for u in user_map.values() if u.buy_in_id in closed]:
+        username = user.username
+        table = table_manager.get_user_table(username)
+        game = table.game if table else None
+        if game and user in game.get_users():
+            # The hand no longer counts: its stake has already been paid back
+            game.bets.pop(user, None)
+            game.remove_active_user(user)
+            game_loop = table_game_map.get(table.id)
+            if game_loop and game_loop.current_player is user:
+                game_loop.turn_done_event.set()
+        if table:
+            socketio.emit('player_left', {'user': username}, to=room(table))
+        socketio.emit('seat_refused', {
+            'message': 'Your buy-in was closed by the central server: back to it to play again'
+        }, to=player_room(username))
+        unseat(username, close_buy_in=False)
+        outbox.drop_seat(user.buy_in_id)
 
 
 def close_forfeited_buy_ins(game):
