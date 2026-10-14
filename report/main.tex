@@ -503,7 +503,17 @@ In contrast, most of the game server's state is in-memory only, with the server 
 Players and the administrator interact with the central server through commands (register, log in, play, put a server under maintenance) and queries (the balance, the list of servers), while the game servers mostly send it events: a server registered, a round finished, a player left, the server is idle, together with the periodic heartbeat that reports who is still seated. The only command flowing the other way is the shutdown sent to the servers under maintenance.
 The interaction between the players and the game server happens with commands on one side (e.g., mid-round actions), and events on the other (e.g., round started, bets closed, turn passed).
 
-\TODO{Put class diagrams of the central server and the game servers here}
+\begin{figure}
+  \centering
+  \includegraphics[width=1\textwidth]{img/class_cs_diagram.png}
+  \caption{Class diagram of the central server.}\label{fig:cs-class}
+\end{figure}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=1\textwidth]{img/class_gs_diagram.png}
+  \caption{Class diagram of the game server.}\label{fig:gs-class}
+\end{figure}
 
 % \begin{itemize}
 %   \item which \textbf{domain entities} are there?
