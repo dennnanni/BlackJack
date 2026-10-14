@@ -171,7 +171,7 @@ A round has a duration of about 2 minutes, depending on how long it takes for pl
 Interactions with the game servers are mildly frequent, with an average of three or four actions per user per round.
 
 Since the majority of the users' interactions happen towards the game servers, distribution is useful to decouple the games from the coordination, scale the games capacity on request and increase fault-tolerance of the games.
-However, the central server represents a single point of failure of the system.
+The database and the central servers' proxy represent a single point of failure of the system.
 The roles in the system are two, the player and the administrator. 
 The administrator has a separate panel in which all the game servers are listed, with their load, last heartbeat record and status.
 
@@ -225,6 +225,9 @@ The administrator has a separate panel in which all the game servers are listed,
     \item The user can leave the table in any moment, automatically losing their bet if the round is ongoing
     \item The user can lose no more than their initial buy-in in a table
     \item The user can win money with a 1:1 ratio for each round
+    \item The admin can log in into the maintenance panel
+    \item The admin can view all the registered game servers with their status and load
+    \item The admin can put game servers under maintenance from the panel
 \end{enumerate}
 \subsection*{Non-functional}
 \begin{enumerate}
@@ -955,9 +958,6 @@ It should be noted that each student is only responsible for their own section.
 
 \section{Future works}\label{future-works}
 
-% moved from ds-features, to be reworked
-The system could need to be further expanded by introducing database replicas, new consistency mechanisms.
-Updates to the servers require a restart, and there are no mechanism to safely shutdown the game servers, the round is interruped and bets are voided but money are not lost\NOTEside{this we can fix too}.
 
 Discuss possible future works, improvements, extensions, optimizations, etc.
 
