@@ -433,7 +433,11 @@ The proxy and the game servers know the central replicas by configuration, as a 
 The central server, instead, is not configured with the game servers: each game server registers at startup, announcing its address and capacity, and receives a numeric identifier, which it keeps across restarts; its heartbeats then keep the registry up to date.
 There is no service discovery for the central replicas, so adding one requires reconfiguring the proxy and every game server.
 
-\TODO{Component / deployment diagram}
+\begin{figure}
+  \centering
+  \includegraphics[width=1\textwidth]{img/component_diagram.png}
+  \caption{System components}\label{fig:component-diagram}
+\end{figure}
 
 % moved from ds-features, to be reworked
 % Users see the central server as a single entry point, and its replication is hidden from them. Game servers are not hidden: the URL shows which one a user is playing on, though the interface never points it out. On the other side, replication is explicit between servers, each game server knows the full list of central replicas, so it can switch to another one when a replica fails.
