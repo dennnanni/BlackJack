@@ -3,7 +3,7 @@ from http import HTTPStatus
 import logging
 from central_server import db
 from central_server import auth
-from shared.messages import BUY_INS, CAPACITY, SETTLED, ERROR, ROUND_ID, SERVER_ID, SUCCESS, RESULTS, HOST, PORT, PLAYERS, INTERNAL_URL, Result
+from shared.messages import BUY_INS, CAPACITY, CLOSED, SETTLED, ERROR, ROUND_ID, SERVER_ID, SUCCESS, RESULTS, HOST, PORT, PLAYERS, INTERNAL_URL, Result
 from flask import Blueprint, jsonify, request
 
 api_bp = Blueprint('api', __name__, url_prefix='/api/servers')
@@ -81,10 +81,15 @@ def heartbeat():
     players = data.get(PLAYERS)
     if not isinstance(players, list):
         return jsonify({ERROR: 'players is required'}), HTTPStatus.BAD_REQUEST
+    # buy-ins of the seated players, to tell the server which ones it must drop
+    buy_ins = data.get(BUY_INS, [])
+    if not isinstance(buy_ins, list):
+        return jsonify({ERROR: 'buy_ins must be a list'}), HTTPStatus.BAD_REQUEST
 
     if not db.update_heartbeat(server_id, players):
         return jsonify({ERROR: 'Unknown server id'}), HTTPStatus.NOT_FOUND
-    return jsonify({SUCCESS: True}), HTTPStatus.OK
+    closed = db.closed_buy_ins(server_id, buy_ins)
+    return jsonify({SUCCESS: True, CLOSED: closed}), HTTPStatus.OK
 
 @api_bp.route('/empty', methods=['POST'])
 def empty():

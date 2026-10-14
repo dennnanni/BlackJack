@@ -6,8 +6,8 @@ from flask_socketio import emit, join_room
 from game_server.game.model import Hand, User
 from game_server.loop import GameLoop
 from game_server.runtime import closing
-from game_server.seats import (absent, can_take_seat, room, seated_buy_ins, sitting_out,
-                               table_game_map, table_manager, user_map)
+from game_server.seats import (absent, can_take_seat, player_room, room, seated_buy_ins,
+                               sitting_out, table_game_map, table_manager, user_map)
 
 
 def register_event_handlers(socketio):
@@ -24,6 +24,7 @@ def register_event_handlers(socketio):
         it a second seat at another table."""
         room_id = room(table)
         join_room(room_id)
+        join_room(player_room(user.username))
 
         game = table.game
         game_loop = table_game_map.get(table.id)
@@ -75,6 +76,7 @@ def register_event_handlers(socketio):
         table = table_manager.assign_user_to_table(user)
 
         join_room(room(table))
+        join_room(player_room(username))
 
         if table.is_ready_to_start():
             table_id = table.id
