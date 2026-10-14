@@ -942,12 +942,12 @@ recall to test corner cases (crashes, errors, etc.)
 
 \section{Deployment}\label{deployment}
 
-The application is deployed using Docker containers, therefore Docker should be installed in the system.
+The application is deployed using Docker containers, therefore Docker should be installed on the system.
 The secret generator script needs Python 3.
 
 To configure the deployment, the \texttt{secret\_generator.py} script should be run from the root of the project.
 This script sets the secrets and informations needed by the system in a \texttt{.env} file, such as the shared secret, session secrets of central replicas and game servers, admin login credentials.
-This step can be done also manually, providing the required 
+This step can also be done manually, providing the required 
 The script \texttt{startup.sh} builds the required images and starts the system.
 
 The provided \texttt{Dockerfile-poetry} and \texttt{Dockerfile} are used to build the initial image installing Poetry, then installing the project on that.
@@ -956,7 +956,7 @@ The database is the first to be started, and the central servers strictly depend
 Game servers depend on the central servers, but no initial healthcheck is implemented, since the registration is retried if the centrals are not available yet.
 The compose file also contains three volumes, one for the database, and two for the two game servers' outboxes.
 Additional per-container configuration variables are provided.
-For example, the game servers are given the list of the central replicas URLs.
+For example, the game servers are given the list of the URLs of the central replicas.
 All the containers are configured to restart automatically on any exit, unless manually stopped.
 
 After startup, the central servers can be reached at \texttt{localhost:5002} through NGINX, while the game servers are exposed on ports 8000 and 8001.
