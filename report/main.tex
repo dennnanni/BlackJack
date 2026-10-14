@@ -700,28 +700,44 @@ Data loss or corruption is prevented by combining at-least-once delivery with at
 
 \subsection{Availability}\label{availability}
 
-% moved from ds-features, to be reworked
-The game servers can be scaled at run-time thanks to the registration mechanism, and they will be assigned some load by the central server dispatch.
+The availability of the system is determined both by the reachability of the central server and at least one game server.
+Load balancing is implemented server-side by the reverse proxy that redirects the traffic to the central replicas.
+Between servers, load balancing is implemented by the central server, which selects the least loaded game server to assign players and avoids dispatching to servers that are full, down, or under maintenance.
 
+Network partitioning is addressed in the following ways:
 \begin{itemize}
-  \item Is there any \textbf{caching} mechanism?
-  %
-  \begin{itemize}
-    \item \emph{where}? \emph{why}?
-  \end{itemize}
-  
-  \item Is there any form of \textbf{load balancing}?
-  %
-  \begin{itemize}
-    \item \emph{where}? \emph{why}?
-  \end{itemize}
-
-  \item In case of \textbf{network partitioning}, how does the system behave?
-  %
-  \begin{itemize}
-    \item \emph{why}? \emph{how}?
-  \end{itemize}
+  \item \textbf{central server and game server}: the game servers prioritize money safety above everything else.
+  Heartbeats let each side decide when the other is unreachable, and game servers fall back to different replicas if the one they're trying to contact is not responding.
+  If none of the replicas is reachable and the lease expired, the game server keeps handling the running rounds, to keep the game smooth, but avoids starting new ones.
+  The game server stops starting rounds before the central server can reassign a player's seat.
+  The results of the last round of each table are stored and resent as soon as the connection is back.
+  This mechanism preserves money better than continuing to start new rounds, as the system doesn't know how long it will take before the central server becomes responsive again. In this period, the central server may have closed buy-ins for players in the table and may have reassigned them, risking playing the money twice.
+  When the partition heals, the game server goes back to sending heartbeats to the central server, and central replies with the list of the buy-ins it has closed in the meantime. Players with closed buy-ins are immediately sent back to the central server, voiding their hand if they were playing a round. Results of rounds completed before the closure are still delivered and applied directly to the player's balance.
+  The system accepts the small risk resulting from this behavior to avoid abruptly sending back the player mid-round.
+  During a partition, the player stuck on an unreachable game server must wait a takeover period in which they cannot be dispatched anywhere else. Here too, the system favours consistency of the money over availability.
+  \item \textbf{central server and database}: the trimmer checks the database availability, and waits a takeover period before closing any buy-ins, to avoid closing the buy-ins of game servers whose heartbeats could not be recorded while the database was down.
+  \item \textbf{browser and game server}: disconnected players get a grace period inside a turn, during which they can reconnect and resume their status, otherwise the table auto-stands them and they are unseated at the end of the round.
 \end{itemize}
+
+% \begin{itemize}
+%   \item Is there any \textbf{caching} mechanism?
+%   %
+%   \begin{itemize}
+%     \item \emph{where}? \emph{why}?
+%   \end{itemize}
+  
+%   \item Is there any form of \textbf{load balancing}?
+%   %
+%   \begin{itemize}
+%     \item \emph{where}? \emph{why}?
+%   \end{itemize}
+
+%   \item In case of \textbf{network partitioning}, how does the system behave?
+%   %
+%   \begin{itemize}
+%     \item \emph{why}? \emph{how}?
+%   \end{itemize}
+% \end{itemize}
 
 \subsection{Security}\label{security}
 
