@@ -75,6 +75,11 @@ class Outbox:
             conn.execute('INSERT OR IGNORE INTO pending_leave VALUES (?, ?)',
                          (buy_in_id, time.time()))
 
+    def drop_seat(self, buy_in_id):
+        """Central closed this buy-in on its own."""
+        with self._connection() as conn:
+            conn.execute('DELETE FROM seated WHERE buy_in_id = ?', (buy_in_id,))
+
     def abandon_seats(self):
         """Turn every seated buy-in into a pending leave. Used at startup,
             when whoever was seated before the restart is gone."""

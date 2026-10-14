@@ -210,6 +210,16 @@ def update_heartbeat(server_id, players):
         return True
 
 
+def closed_buy_ins(server_id, buy_in_ids):
+    """The given buy-ins that the server must not play on any more."""
+    with SessionLocal() as session:
+        still_open = {buy_in.id for buy_in in session.query(BuyIn).filter(
+            BuyIn.id.in_(buy_in_ids),
+            BuyIn.server_id == server_id,
+            BuyIn.closed_at.is_(None))}
+    return [id for id in buy_in_ids if id not in still_open]
+
+
 def _seats_per_server(session):
     return dict(session.query(Seat.server_id, func.count())
                 .group_by(Seat.server_id).all())

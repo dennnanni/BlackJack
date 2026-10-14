@@ -29,6 +29,7 @@ USERNAME = 'username'
 BALANCE = 'balance'
 BALANCE_DIFFERENCE = 'balance_difference'
 SETTLED = 'settled'
+CLOSED = 'closed'
 
 @dataclass
 class Result:

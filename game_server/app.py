@@ -10,7 +10,7 @@ from game_server.config import HEARTBEAT_INTERVAL, SECRET_KEY, SERVER_HOST, SERV
 from game_server.events import register_event_handlers
 from game_server.join import game_bp
 from game_server.runtime import closing, outbox, socketio
-from game_server.seats import seated_players, tables_idle
+from game_server.seats import drop_closed_buy_ins, held_buy_ins, seated_players, tables_idle
 
 # Set once central has been told that nobody is left at our tables
 empty_reported = threading.Event()
@@ -52,7 +52,8 @@ def _join_central():
 def _heartbeat_loop():
     while True:
         time.sleep(HEARTBEAT_INTERVAL)
-        if client.heartbeat(seated_players()) == HTTPStatus.NOT_FOUND:
+        status = client.heartbeat(seated_players(), held_buy_ins(), drop_closed_buy_ins)
+        if status == HTTPStatus.NOT_FOUND:
             # Central lost our id. register for a new one.
              _register()
 
