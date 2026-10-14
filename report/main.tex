@@ -553,28 +553,36 @@ The components of the system interact with each other both in a synchronous and 
 % \end{itemize}
 
 \begin{figure}
-  \includegraphics[width=1\textwidth]{img/sequence_diagram}
   \centering
+  \includegraphics[width=1\textwidth]{img/sequence_diagram}
   \caption{Interaction of the system during a game lifetime}
+  \label{fig:sequence-game}
 \end{figure}
 
 \subsection{Behaviour}\label{behaviour}
 
-% moved from ds-features, to be reworked
-Game servers are multithread, and there is one thread per table.
+The central server is stateless, so every replica can handle any request, since everything it needs is read from and written to the shared database. It reacts to the requests of the browsers and of the game servers, and the only work it starts on its own is done by two background threads, one closing the abandoned buy-ins and pruning old records, the other sending the shutdown to the game servers under maintenance.
+The game servers, instead, are stateful. Each table runs in its own thread, which plays the rounds and reacts to the players' actions and to the timeouts. The game state is kept in memory, and only the server identifier, the seated buy-ins and the messages still to be delivered are stored in the outbox.
+The money is updated only by the central server. Part of the balance is moved into a buy-in when a player is dispatched, the round results sent by the game server are applied to it, and it is settled back into the balance when the player leaves the table.
+The behaviour of a player, from the login to the rounds at the table, is shown in \Cref{fig:state-player}.
 
-\begin{itemize}
-  \item how does \emph{each} component \textbf{behave} individually (e.g.~in \emph{response} to \emph{events} or messages)?
-  \begin{itemize}
-    \item some components may be \emph{stateful}, others \emph{stateless}
-  \end{itemize}
 
-  \item which components are in charge of updating the \textbf{state} of the system? \emph{when}? \emph{how}?
-\end{itemize}
+% \begin{itemize}
+%   \item how does \emph{each} component \textbf{behave} individually (e.g.~in \emph{response} to \emph{events} or messages)?
+%   \begin{itemize}
+%     \item some components may be \emph{stateful}, others \emph{stateless}
+%   \end{itemize}
 
-\begin{quote}
-State diagrams are welcome here
-\end{quote}
+%   \item which components are in charge of updating the \textbf{state} of the system? \emph{when}? \emph{how}?
+% \end{itemize}
+
+
+\begin{figure}
+  \centering
+  \includegraphics[width=1\textwidth]{img/state_diagram.png}
+  \caption{State diagram of a player.}
+  \label{fig:state-player}
+\end{figure}
 
 \subsection{Data and Consistency Issues}\label{data-and-consistency-issues}
 
