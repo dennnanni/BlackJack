@@ -993,6 +993,21 @@ The maintenance panel can be reached at \texttt{localhost:5002/admin}.
 
 \section{Self-evaluation}\label{self-evaluation}
 
+\subsection*{Juri Guglielmi}
+
+\subsection*{Denise Nanni}
+The distributed BlackJack we developed meets the core requirements of this kind of application: money safety and consistency.
+Although more robustness and failsafe mechanisms would be required to make this project up to the standard of a real betting application, in my opinion this implementation takes into account the basics of distributing a money-handling infrastructure.
+
+The strengths of the product are the statelessness of the central server, which made replication easy, the results applied exactly once, and the incident limitation given by the buy-in, which caps the amount a game server can handle.
+Its weaknesses are the single points of failure in the proxy and database, the loss of playability in case of network partitioning and crashes, which can leave a player waiting before they can be dispatched again, and the basic level of security of trusting one shared secret.
+
+My contribution to the project is the central server, including accounts, balances, buy-ins, dispatch, load balancing, the admin panel, and the trimmer that settles abandoned buy-ins.
+Every design choice was discussed and agreed on with my teammate, and I think our roles were balanced throughout the project lifetime.
+
+This project went through many breaks which led us to an extensive refactoring to make things more straightforward and easy to resume from. Although I feel we didn't fully realise the idea I had in mind when sending the proposal, I'm happy with the end result and I think we came close enough to it.
+
+
 \begin{itemize}
   \item An individual section is required for each member of the group
   \item Each member must self-evaluate their work, listing the strengths and weaknesses of the product
