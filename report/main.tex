@@ -897,8 +897,19 @@ The automated tests of both servers are written with Pytest (see \cref{automatic
 
 \subsection{Automatic Testing}\label{automatic-testing}
 
-% moved from ds-features, to be reworked
-Pytests ensure basic mechanisms are enforced.
+The automated tests are unit and component tests written with Pytest, placed in \texttt{central\_server/tests} and \texttt{game\_server/tests}.
+They require neither Docker nor a running database: the central server is tested against an in-memory SQLite database, the outbox against a temporary file, 
+and the secrets and the administrator credentials are fixed test values set in the \texttt{conftest.py} of each package.
+The whole suite runs from the root of the repository with \texttt{poetry run pytest}; no continuous-integration pipeline is configured, so the tests are run manually.
+
+The game rules are tested in isolation, while the game loop runs in its own thread with the Socket.IO server, the outbox and the deck replaced by test doubles, so that a round can be played with scripted cards and its events checked.
+Most of the tests, however, focus on the money and on the corner cases that could lose or duplicate it: forged or misused tokens, replayed joins, players leaving mid-round, 
+crashes of the game server, simulated by reopening the outbox file, and retried results, which must be applied only once.
+The central server is tested through its database functions and, where the request path matters, through the Flask test client. A few tests also simulate races between replicas, such as a dispatch to a server that filled up after the list of servers was read.
+
+The interaction between the two kinds of server is tested at their boundary: each side is tested against the tokens and messages the other one produces, built from the \texttt{shared} package, with the outgoing HTTP calls replaced by stubs.
+This keeps the tests fast and deterministic, but leaves the features specific to PostgreSQL (row locks, advisory locks and the database clock) and the background threads (heartbeats, outbox draining, replica rotation and the trimmer) uncovered.
+These, and the system as a whole, are tested manually on the Docker Compose deployment described in \cref{deployment}.
 
 \begin{itemize}
   \item how were individual components \textbf{\emph{unit}-test}ed?
@@ -930,6 +941,15 @@ recall to test corner cases (crashes, errors, etc.)
 \end{quote}
 
 \subsection{Acceptance test}\label{acceptance-test}
+
+The acceptance tests were performed manually on the Docker Compose deployment, against the requirements in \cref{requirements}.
+The gameplay was tested with several browsers and tabs connected to the same table, going through registration, login, buy-in, bets, actions on the hand, sitting out and leaving, and checking that the balance was updated once the player left.
+The administrator side was tested by logging into the maintenance panel, checking the status and load of the game servers, and putting one of them under maintenance until its shutdown.
+Faults were injected by stopping the containers: a game server stopped mid-round voids the round, warns its players and returns their buy-ins, and once restarted delivers its outbox and settles the previously seated players;
+a single central replica stopped leaves the system available through the other one, while stopping all of them lets the running rounds finish but prevents new ones until a replica is back and the pending results are delivered.
+
+These tests were not automated because they involve real browsers, several containers and timeouts.
+Automating them would require browser automation and the orchestration of the containers from the tests, which was beyond the scope of the project.
 
 \begin{itemize}
   \item did you perform any \emph{manual} testing?
