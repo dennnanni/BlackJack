@@ -1,5 +1,6 @@
 \documentclass{scrartcl}
 \usepackage[utf8]{inputenc}
+\usepackage{float} % must be loaded before hyperref
 \usepackage{hyperref}
 \usepackage{url}
 \usepackage{natbib}
@@ -1001,15 +1002,112 @@ The maintenance panel can be reached at \texttt{localhost:5002/admin}.
 
 \section{User Guide}\label{user-guide}
 
-\begin{itemize}
-  \item how to use your software?
-  %
-  \begin{itemize}
-    \item provide instructions
-    \item provide expected outcomes
-    \item provide screenshots if possible
-  \end{itemize}
-\end{itemize}
+Once the system is running players reach it at \texttt{http://localhost:5002},
+and administrators at \texttt{http://localhost:5002/admin/}.
+
+\subsection*{Players}
+
+The access page has two tabs, \emph{Login} and \emph{Register} (\cref{fig:login}).
+A new account starts with a balance of 1000; after signing up, the player logs in with the same username and password.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.4\textwidth]{img/login}
+  \caption{Access page of the central server}
+  \label{fig:login}
+\end{figure}
+
+
+The home page shows the balance and asks for the buy-in, the amount brought to the table (\cref{fig:homepage}).
+The buy-in leaves the balance while the player is seated, and whatever is left of it comes back when they get up;
+the buttons \emph{25\%}, \emph{50\%} and \emph{Max} fill in a share of the balance.
+Pressing \emph{Play} dispatches the player to a game server, and the browser is redirected to its table without further action.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.7\textwidth]{img/homepage}
+  \caption{Home page with the balance and the buy-in}
+  \label{fig:homepage}
+\end{figure}
+
+
+The table page shows the player's balance at the table, the dealer, the seated players and a log of the events of the table (\cref{fig:place-bet}).
+Each round opens with a betting window of 35 seconds: the player types an amount, at most their balance at the table, and presses \emph{Place bet}.
+A player who does not bet in time does not take part in the round.
+\emph{Sit out} skips the next rounds without leaving the table, until it is pressed again.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{img/place_bet}
+  \caption{Table page during the betting window}
+  \label{fig:place-bet}
+\end{figure}
+
+
+Each player receives two cards and the dealer one face-up card; then the players take their turn one at a time (\cref{fig:hit}).
+During their turn, the player can \emph{Hit} to draw another card, \emph{Stand} to keep their hand,
+or \emph{Double down} on the first two cards to double the bet and draw exactly one more card.
+A turn lasts at most 30 seconds, after which the player automatically stands.
+Then the dealer draws until reaching at least 17, and the results are shown in the log: a win pays the amount of the bet, a tie gives it back.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{img/hit}
+  \caption{Turn of a player}
+  \label{fig:hit}
+\end{figure}
+
+
+\emph{Leave table} asks for a confirmation and then brings the player back to the central server (\cref{fig:leave-table}).
+A bet placed on the current hand is lost.
+What is left of the buy-in returns to the balance shown on the home page, which may take a few seconds to update.
+Closing the browser, instead, does not forfeit the hand: after a few seconds the player automatically stands and the hand is settled as usual.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.6\textwidth]{img/leave_table}
+  \caption{Confirmation before leaving the table}
+  \label{fig:leave-table}
+\end{figure}
+
+\subsection*{Administrators}
+
+
+After logging in with the credentials set in the \texttt{.env} file, the administrator sees the list of the known game servers,
+updated every few seconds (\cref{fig:admin-panel}).
+For each server the panel shows its address, the time of its last heartbeat, its load, and its state:
+\emph{active} if it is receiving players, \emph{down} if its heartbeats stopped,
+\emph{closing} while it is under maintenance but still has players or open buy-ins,
+and \emph{maintenance} once it is empty and can be stopped safely.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{img/panel_admin}
+  \caption{Administration panel}
+  \label{fig:admin-panel}
+\end{figure}
+
+
+\emph{Start maintenance} puts a game server under maintenance after a confirmation (\cref{fig:maintenance}).
+The central server stops dispatching players to it, and the game server ends the rounds in progress and sends its players back to the central server.
+Once the state is \emph{maintenance}, the game server can be stopped or updated: it becomes \emph{active} again when it is restarted and registers with the central server.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{img/image}
+  \caption{Confirmation before putting a game server under maintenance}
+  \label{fig:maintenance}
+\end{figure}
+
+% \begin{itemize}
+%   \item how to use your software?
+%   %
+%   \begin{itemize}
+%     \item provide instructions
+%     \item provide expected outcomes
+%     \item provide screenshots if possible
+%   \end{itemize}
+% \end{itemize}
 
 \section{Self-evaluation}\label{self-evaluation}
 
