@@ -1112,6 +1112,18 @@ Once the state is \emph{maintenance}, the game server can be stopped or updated:
 \section{Self-evaluation}\label{self-evaluation}
 
 \subsection*{Juri Guglielmi}
+In my opinion, the project achieves its primary objective: players can play at different tables hosted by separate game servers while their balances remain consistent, even when failures occur. The system is not ready for a real-world service, but I think it addresses the key challenges of running a game that handles money.
+
+I consider fault handling on the game server side to be the main strength of the work: a server that crashes or loses its connection
+ to the central server can recover and deliver its pending results without losing or applying any result twice. 
+ Game servers can also be added dynamically, allowing the system to scale as the number of players grows. 
+ On the other hand, a failure can still interrupt a game and prevent players from completing the current round and the game state 
+ is not persisted, so an interrupted round cannot be resumed.
+
+I mainly worked on the game server and its interaction with the central server: the round and turn lifecycle, 
+handling players who disconnect or leave the table, recovery after a restart, and the persistent outbox used to retry result delivery.
+
+I am satisfied with the result, and the project showed me how much of the work in a distributed system involves handling failures rather than the normal flow
 
 \subsection*{Denise Nanni}
 The distributed BlackJack we developed meets the core requirements of this kind of application: money safety and consistency.
