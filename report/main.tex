@@ -139,7 +139,10 @@
 \maketitle
 
 \begin{abstract}
-The project implements a distributed BlackJack: a central server allows players to register, log in and find a table to play, while game servers handle the game logic. The project’s goal is to provide a distributed platform that handles multiple players in tables, enforcing timed staking and actions, and keeping the players’ money safe across rounds. The central server enforces the correctness of the players’ balances, while the game servers can be scaled out to support an increasing player load.
+The project implements a distributed BlackJack: a central server allows players to register, log in and find a table to play, while game servers handle the game logic. The project's goal is to provide a distributed platform that handles multiple players in tables, enforcing timed staking and actions, and keeping the players' money safe across rounds.
+The central server is replicated as stateless instances behind a load balancer, sharing a single database that is the source of truth for the balances, while game servers register at runtime and can be scaled out with the player load.
+A game server can only play the buy-in reserved for each player, and delivers the round results through a persistent outbox, which the central server deduplicates so that each result is applied exactly once.
+Heartbeats and leases detect failed or unreachable servers, and the system favours the consistency of the money over availability: interrupted rounds are voided, and no new round starts while a game server cannot reach the central server.
 
 The application is implemented using Python, Flask, and PostgreSQL, and leverages Docker containers for the local deployment.
 It implements authorization via JWT tokens for the game servers registration and the user join mechanism.
