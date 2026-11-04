@@ -1148,10 +1148,18 @@ It should be noted that each student is only responsible for their own section.
 
 \section{Future works}\label{future-works}
 
+This project may benefit from the following improvements:
 
-Discuss possible future works, improvements, extensions, optimizations, etc.
+\begin{itemize}
+  \item \textbf{security}: securing the connection to prevent eavesdropping of plaintext credentials; using per-server signing keys instead of a shared secret, so compromised game server could not forge fake tokens as the central server;
+  \item \textbf{fault-tolerance}: add a shared database replica;
+  \item \textbf{service discovery}: replace hardcoded links to the central replicas with proper service discovery in the servers' network;
+  \item \textbf{scalability}: allow dynamic registration of new central server's replicas at runtime;
+  \item \textbf{integrity}: record all transactions in the system to further inspect money flows;
+  \item \textbf{admin tooling}: extend admin panel to inspect unapplied results and resolve errors;
+  \item \textbf{UX}: improve graphics and user experience.
+\end{itemize}
 
-Also discuss here any unimplemented feature, and how you would have implemented it.
 
 \bibliographystyle{plain}
 \bibliography{references}
