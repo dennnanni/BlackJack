@@ -686,19 +686,20 @@ Central-server replicas are substitutable: when one fails, the remaining replica
 the available capacity decreases. The shared database and the reverse proxy remain single points of failure.
 
 Game servers send periodic reports of the players seated at their tables. The central server uses these heartbeats to monitor server 
-availability. If a player is no longer reported, the central server waits through a grace period before releasing the seat, 
-giving a newly dispatched player time to join. If a game server fails and remains offline, the central server eventually 
-releases its seats, closes buy-ins that are no longer held by an active server, and returns the remaining amounts to the players’ balances.
+availability. If a player is no longer reported, the central server waits through a grace period before releasing the seat. If a game server fails and remains offline, the central server eventually 
+releases its seats, closes buy-ins that are no longer held by an active server, and returns the remaining amounts to the players' balances.
 
-A game-server failure causes its in-memory table state to be lost. Any interrupted round is voided and not resumed; the player is notified 
-that the server is unavailable and is disconnected. If the game server restarts, it delivers queued outbox messages and 
+A game-server failure causes its in-memory table state to be lost. Any interrupted round is voided and not resumed; the player is notified by the client
+that the server is unavailable.
+If the game server restarts, it delivers queued outbox messages and 
 reports the buy-ins of its previously seated players as pending leaves so that the central server can settle them.
+After a restart, if it has any player recorded in the outbox, the game server sends the leaves for such players. This could happen when the server crashes and restarts, and the mechanism is used to avoid the possible issues that there may be with closed buy-ins and reassigned players. 
 If the central server is unavailable, game servers try its replicas in rotation and retry pending results and leave notifications. 
 The active round can finish and its result is stored in the outbox, but no subsequent round starts until communication 
 is restored. 
 
 The system gives priority to consistency and correctness over availability. 
-A communication failure with the central server does not interrupt a completed round, since its result remains in the outbox for retry, 
+A communication failure with the central server does not interrupt an in-progress round, since its result remains in the outbox for retry, 
 but it prevents the player from starting another round. Failure transparency is therefore limited: a game-server failure 
 voids the active round, while a temporary central-server failure delays the processing of results.
 \begin{comment}
@@ -737,14 +738,14 @@ Between servers, load balancing is implemented by the central server, which sele
 
 Network partitioning is addressed in the following ways:
 \begin{itemize}
-  \item \textbf{central server and game server}: the game servers prioritize money safety above everything else.
+  \item \textbf{central server and game server}: the game servers prioritize money safety.
   Heartbeats let each side decide when the other is unreachable, and game servers fall back to different replicas if the one they're trying to contact is not responding.
   If none of the replicas is reachable and the lease expired, the game server keeps handling the running rounds, to keep the game smooth, but avoids starting new ones.
   The game server stops starting rounds before the central server can reassign a player's seat.
   The results of the last round of each table are stored and resent as soon as the connection is back.
   This mechanism preserves money better than continuing to start new rounds, as the system doesn't know how long it will take before the central server becomes responsive again. In this period, the central server may have closed buy-ins for players in the table and may have reassigned them, risking playing the money twice.
   When the partition heals, the game server goes back to sending heartbeats to the central server, and central replies with the list of the buy-ins it has closed in the meantime. Players with closed buy-ins are immediately sent back to the central server, voiding their hand if they were playing a round. Results of rounds completed before the closure are still delivered and applied directly to the player's balance.
-  The system accepts the small risk resulting from this behavior to avoid abruptly sending back the player mid-round.
+  The system accepts the small risk of incongruent balances resulting from this behavior to avoid abruptly sending back the player mid-round.
   During a partition, the player stuck on an unreachable game server must wait a takeover period in which they cannot be dispatched anywhere else. Here too, the system favours consistency of the money over availability.
   \item \textbf{central server and database}: the trimmer checks the database availability, and waits a takeover period before closing any buy-ins, to avoid closing the buy-ins of game servers whose heartbeats could not be recorded while the database was down.
   \item \textbf{browser and game server}: disconnected players get a grace period inside a turn, during which they can reconnect and resume their status, otherwise the table auto-stands them and they are unseated at the end of the round.
@@ -880,7 +881,7 @@ The central server runs the cleanup (the \emph{trimmer}) and the sender of the s
 \paragraph{Docker}
 The system is built and run with Docker and Docker Compose, which start a container for each component: the database, the two central replicas, the proxy and the two game servers.
 Each game server mounts a volume for its outbox, and the database mounts a volume for its data, so that both survive the restart of the containers.
-The central replicas and the game servers are restarted automatically, and the central replicas wait for the database to pass its health check before starting.
+All the services are restarted automatically, and the central replicas wait for the database to pass its health check before starting.
 
 \paragraph{NGINX}
 An NGINX reverse proxy is the single entry point of the browsers to the central replicas, and balances the requests among them.
@@ -912,34 +913,34 @@ The interaction between the two kinds of server is tested at their boundary: eac
 This keeps the tests fast and deterministic, but leaves the features specific to PostgreSQL (row locks, advisory locks and the database clock) and the background threads (heartbeats, outbox draining, replica rotation and the trimmer) uncovered.
 These, and the system as a whole, are tested manually on the Docker Compose deployment described in \cref{deployment}.
 
-\begin{itemize}
-  \item how were individual components \textbf{\emph{unit}-test}ed?
+% \begin{itemize}
+%   \item how were individual components \textbf{\emph{unit}-test}ed?
   
-  \item how was communication, interaction, and/or integration among components tested?
+%   \item how was communication, interaction, and/or integration among components tested?
   
-  \item how to \textbf{\emph{end-to-end}-test} the system?
-  %
-  \begin{itemize}
-    \item e.g.~production vs.~test environment
-  \end{itemize}
+%   \item how to \textbf{\emph{end-to-end}-test} the system?
+%   %
+%   \begin{itemize}
+%     \item e.g.~production vs.~test environment
+%   \end{itemize}
 
-  \item for each test specify:
-  %
-  \begin{itemize}
-    \item rationale of individual tests
-    \item how were the test automated
-    \item how to run them
-    \item which requirement they are testing, if any
-  \end{itemize}
-\end{itemize}
+%   \item for each test specify:
+%   %
+%   \begin{itemize}
+%     \item rationale of individual tests
+%     \item how were the test automated
+%     \item how to run them
+%     \item which requirement they are testing, if any
+%   \end{itemize}
+% \end{itemize}
 
-\begin{quote}
-recall that \emph{deployment} \textbf{automation} is commonly used to \emph{test} the system in \emph{production-like} environment
-\end{quote}
+% \begin{quote}
+% recall that \emph{deployment} \textbf{automation} is commonly used to \emph{test} the system in \emph{production-like} environment
+% \end{quote}
 
-\begin{quote}
-recall to test corner cases (crashes, errors, etc.)
-\end{quote}
+% \begin{quote}
+% recall to test corner cases (crashes, errors, etc.)
+% \end{quote}
 
 \subsection{Acceptance test}\label{acceptance-test}
 
@@ -952,14 +953,14 @@ a single central replica stopped leaves the system available through the other o
 These tests were not automated because they involve real browsers, several containers and timeouts.
 Automating them would require browser automation and the orchestration of the containers from the tests, which was beyond the scope of the project.
 
-\begin{itemize}
-  \item did you perform any \emph{manual} testing?
-  %
-  \begin{itemize}
-    \item what did you test?
-    \item why wasn't it automatic?
-  \end{itemize}
-\end{itemize}
+% \begin{itemize}
+%   \item did you perform any \emph{manual} testing?
+%   %
+%   \begin{itemize}
+%     \item what did you test?
+%     \item why wasn't it automatic?
+%   \end{itemize}
+% \end{itemize}
 
 \section{Deployment}\label{deployment}
 
@@ -968,7 +969,7 @@ The secret generator script needs Python 3.
 
 To configure the deployment, the \texttt{secret\_generator.py} script should be run from the root of the project.
 This script sets the secrets and informations needed by the system in a \texttt{.env} file, such as the shared secret, session secrets of central replicas and game servers, admin login credentials.
-This step can also be done manually, providing the required 
+This step can also be done manually, providing the required fields.
 The script \texttt{startup.sh} builds the required images and starts the system.
 
 The provided \texttt{Dockerfile-poetry} and \texttt{Dockerfile} are used to build the initial image installing Poetry, then installing the project on that.
@@ -1123,7 +1124,7 @@ I consider fault handling on the game server side to be the main strength of the
 I mainly worked on the game server and its interaction with the central server: the round and turn lifecycle, 
 handling players who disconnect or leave the table, recovery after a restart, and the persistent outbox used to retry result delivery.
 
-I am satisfied with the result, and the project showed me how much of the work in a distributed system involves handling failures rather than the normal flow
+I am satisfied with the result, and the project showed me how much of the work in a distributed system involves handling failures rather than the normal flow.
 
 \subsection*{Denise Nanni}
 The distributed BlackJack we developed meets the core requirements of this kind of application: money safety and consistency.
@@ -1138,13 +1139,13 @@ Every design choice was discussed and agreed on with my teammate, and I think ou
 This project went through many breaks which led us to an extensive refactoring to make things more straightforward and easy to resume from. Although I feel we didn't fully realise the idea I had in mind when sending the proposal, I'm happy with the end result and I think we came close enough to it.
 
 
-\begin{itemize}
-  \item An individual section is required for each member of the group
-  \item Each member must self-evaluate their work, listing the strengths and weaknesses of the product
-  \item Each member must describe their role within the group as objectively as possible.
-\end{itemize}
+% \begin{itemize}
+%   \item An individual section is required for each member of the group
+%   \item Each member must self-evaluate their work, listing the strengths and weaknesses of the product
+%   \item Each member must describe their role within the group as objectively as possible.
+% \end{itemize}
 
-It should be noted that each student is only responsible for their own section.
+% It should be noted that each student is only responsible for their own section.
 
 \section{Future works}\label{future-works}
 
